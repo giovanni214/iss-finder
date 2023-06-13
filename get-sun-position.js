@@ -32,9 +32,8 @@ function getSunPosition(time = new Date()) {
 	const sha = 360 - ra;
 	const ghaA = 15 * gmst;
 	const gha = sha + ghaA;
-	console.log(`${gha}, ${radToDeg(dec)}`);
 
-	console.log("AHHHHHHHHHH");
+	return { latitude: gha, longitude: radToDeg(dec) };
 }
 
-getSunPosition();
+module.exports = getSunPosition;

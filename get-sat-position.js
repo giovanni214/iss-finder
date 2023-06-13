@@ -1,5 +1,5 @@
-const { radToDeg, getTLE } = require("./utils");
 const satellite = require("satellite.js");
+const { radToDeg, getTLE } = require("./utils");
 
 class Satellite {
 	constructor(tle) {
@@ -40,7 +40,7 @@ class Satellite {
 		location, //Should be like observerGd above
 		startTime, //Should be in Date() format
 		endTime, // Should be in Date() format
-		stepsInSeconds = 30,
+		errorInSeconds = 30,
 		minElevationAngle = 0
 	) {
 		//check for missing properties needed for calculation
@@ -68,14 +68,14 @@ class Satellite {
 			throw new Error(`"${endTime}" is not a valid date.`);
 		}
 
-		stepsInSeconds *= 1000; //1second = 1000millis
+		errorInSeconds *= 1000; //1second = 1000millis
 		startTime = startTime.getTime(); //convert to millis
 		endTime = endTime.getTime();
 
 		let passes = [];
 		let pass = [];
 		let peak = -Infinity;
-		for (let time = startTime; time < endTime; time += stepsInSeconds) {
+		for (let time = startTime; time < endTime; time += errorInSeconds) {
 			//grab the satellite position relative to you
 			const position = this.getLocation(new Date(time), "ecf");
 			const observerPOV = satellite.ecfToLookAngles(location, position);
@@ -109,6 +109,7 @@ class Satellite {
 	}
 }
 
+//example function to predict the ISS
 async function predictISS() {
 	//ISS (ZARYA) from https://celestrak.org/NORAD/elements/gp.php?CATNR=25544
 	const tleData = await getTLE(
@@ -129,4 +130,4 @@ async function predictISS() {
 	console.log(passes);
 }
 
-predictISS();
+module.exports = Satellite;
