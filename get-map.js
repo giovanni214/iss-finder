@@ -42,21 +42,23 @@ app.get("/map", async (__, res) => {
 		"2 25544  51.6423 349.1942 0005364  76.5424  61.7713 15.50711488401146"
 	];
 
+	//load images and screen
 	const mapImg = await loadImage(path.join(__dirname, "images", "map.jpg"));
 	const issImg = await loadImage(path.join(__dirname, "images", "iss.png"));
 	const canvas = createCanvas(mapImg.width, mapImg.height);
 	const ctx = canvas.getContext("2d");
 	ctx.drawImage(mapImg, 0, 0);
 
-	//get path of iss
+	//predict the path of iss
 	const iss = new Satellite(issTLE);
 	const paths = [];
-	for (let i = 0; i < 1000; i++) {
+	for (let i = 0; i < 60; i++) {
 		let issLoc = iss.getLocation(addMinutes(new Date(), i), "latlon");
 		issLoc = millerProjection(canvas.width, issLoc.latitude, issLoc.longitude);
 		paths.push(issLoc);
 	}
 
+	//draw the iss path
 	ctx.save();
 	ctx.translate(canvas.width / 2, canvas.height / 2);
 	ctx.beginPath();
@@ -69,12 +71,26 @@ app.get("/map", async (__, res) => {
 		}
 	}
 	ctx.stroke();
-	//draw the iss in the middle of point
-	ctx.drawImage(
-		issImg,
-		paths[0][0] - issImg.width / 2,
-		paths[0][1] - issImg.height / 2
-	);
+
+	//draw the circle the iss will go in
+	ctx.save();
+	ctx.beginPath();
+	ctx.fillStyle = "rgba(200, 200, 255, 0.3)";
+	ctx.arc(paths[0][0], paths[0][1], issImg.width / 2 + 20, 0, 2 * Math.PI); //circle
+	ctx.stroke();
+	ctx.fill();
+	ctx.clip();
+
+	//point the iss in the direction it's going and draw it
+	ctx.save();
+	ctx.translate(paths[0][0], paths[0][1]); //doing this so rotate works properly
+	let pointToAngle = Math.atan2(paths[3][1], paths[3][0]);
+	if (pointToAngle < 0) pointToAngle += 2 * Math.PI;
+	ctx.rotate(pointToAngle);
+	ctx.drawImage(issImg, -issImg.width / 2, -issImg.height / 2);
+	ctx.restore();
+
+	ctx.restore(); //seperated for clarity
 	ctx.restore();
 
 	//send canvas to client
@@ -86,6 +102,7 @@ app.get("/map", async (__, res) => {
 	res.send(stream);
 });
 
+//run the server on a port
 app.listen(port, () => {
 	console.log(`Running`);
 });
