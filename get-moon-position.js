@@ -188,8 +188,11 @@ function getObliquity(time = new Date()) {
     5.79 * U ** 9 +
     2.45 * U ** 10;
 
-  const trueObliquity = E0 + sumOfObliquity;
+  //turns out these values are in arc seconds :|
+  sumOfLongitudes /= 3600;
+  sumOfObliquity /= 3600;
 
+  const trueObliquity = E0 + sumOfObliquity;
   return { trueObliquity, longitudeNutation: sumOfLongitudes };
 }
 
@@ -514,38 +517,41 @@ function getMoonPosition(time = new Date()) {
   sumOfLatitudes += 127 * sin(Lp - Mp); //Flattening of Earth
   sumOfLatitudes += -115 * sin(Lp + Mp); //Flattening of Earth
 
-  function tan(x) {
-    x = degToRad(x);
-    return Math.tan(x);
-  }
-
   const { trueObliquity, longitudeNutation } = getObliquity(time);
-  const longitude = Lp + sumOfLongitudes / 10 ** 6; //degrees
-  const apparentLongitude = longitude + longitudeNutation; //nutation in longitude (chapter 22)
-  const latitude = sumOfLatitudes / 10 ** 6; //degrees
+  const Eclipticlongitude = Lp + sumOfLongitudes / 10 ** 6 + longitudeNutation; //degrees
+  const Eclipticlatitude = sumOfLatitudes / 10 ** 6; //degrees
   const distance = 385000.56 + sumofDistances / 10 ** 3; //kilometers
   //Equatorial Horizontal Parallax = EHP
   const EHP = radToDeg(Math.asin(6378.14 / distance));
-  let rightAscension = Math.atan2(
-    cos(latitude) * sin(apparentLongitude) * cos(trueObliquity) -
-      sin(latitude) * sin(trueObliquity),
-    cos(latitude) * cos(apparentLongitude)
+
+  const rightAscension = Math.atan2(
+    cos(Eclipticlatitude) * sin(Eclipticlongitude) * cos(trueObliquity) -
+      sin(Eclipticlatitude) * sin(trueObliquity),
+    cos(Eclipticlatitude) * cos(Eclipticlongitude)
   );
 
-  let declination = Math.asin(
-    cos(trueObliquity) * sin(latitude) +
-      sin(trueObliquity) * cos(latitude) * sin(apparentLongitude)
+  const declination = Math.asin(
+    cos(trueObliquity) * sin(Eclipticlatitude) +
+      sin(trueObliquity) * cos(Eclipticlatitude) * sin(Eclipticlongitude)
   );
 
-  declination = radToDeg(declination);
-  // rightAscension = radToDeg(rightAscension);
   const gmst = satellite.gstime(time);
+  const longitude = radToDeg(rightAscension - gmst);
+  const latitude = radToDeg(declination);
 
   console.dir({
-    latitude: declination,
-    longitude: radToDeg(rightAscension - gmst),
+    latitude,
+    longitude,
   });
-  return { latitude, longitude: apparentLongitude, distance, EHP };
+
+  return {
+    latitude,
+    longitude,
+    Eclipticlatitude,
+    Eclipticlongitude,
+    distance,
+    EHP,
+  };
 }
 
 Date.prototype.addHours = function (h) {
@@ -553,6 +559,6 @@ Date.prototype.addHours = function (h) {
   return this;
 };
 
-const currentTime = new Date().addHours(4);
+const currentTime = new Date(703036800050);
 
 getMoonPosition(currentTime);
