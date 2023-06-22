@@ -517,24 +517,26 @@ function getMoonPosition(time = new Date()) {
   sumOfLatitudes += 127 * sin(Lp - Mp); //Flattening of Earth
   sumOfLatitudes += -115 * sin(Lp + Mp); //Flattening of Earth
 
+  //Gather final data
   const { trueObliquity, longitudeNutation } = getObliquity(time);
-  const Eclipticlongitude = Lp + sumOfLongitudes / 10 ** 6 + longitudeNutation; //degrees
+  const Eclipticlongitude = Lp + sumOfLongitudes / 10 ** 6 + longitudeNutation; //degrees + nutation
   const Eclipticlatitude = sumOfLatitudes / 10 ** 6; //degrees
   const distance = 385000.56 + sumofDistances / 10 ** 3; //kilometers
   //Equatorial Horizontal Parallax = EHP
   const EHP = radToDeg(Math.asin(6378.14 / distance));
 
+  //converting from Ecliptic to Equatorial coordinates
   const rightAscension = Math.atan2(
     cos(Eclipticlatitude) * sin(Eclipticlongitude) * cos(trueObliquity) -
       sin(Eclipticlatitude) * sin(trueObliquity),
     cos(Eclipticlatitude) * cos(Eclipticlongitude)
   );
-
   const declination = Math.asin(
     cos(trueObliquity) * sin(Eclipticlatitude) +
       sin(trueObliquity) * cos(Eclipticlatitude) * sin(Eclipticlongitude)
   );
 
+  //gets sub-lunar point
   const gmst = satellite.gstime(time);
   const longitude = radToDeg(rightAscension - gmst);
   const latitude = radToDeg(declination);
