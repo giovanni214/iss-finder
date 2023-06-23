@@ -348,6 +348,4 @@ Date.prototype.addHours = function (h) {
 	return this;
 };
 
-getSunPosition(new Date());
-
 module.exports = getSunPosition;

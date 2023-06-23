@@ -353,6 +353,4 @@ Date.prototype.addHours = function (h) {
 	return this;
 };
 
-const currentTime = new Date(703036800050);
-
-getMoonPosition(currentTime);
+module.exports = getMoonPosition;
