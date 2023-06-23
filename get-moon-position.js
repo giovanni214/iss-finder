@@ -4,12 +4,13 @@ const {
 	sin,
 	cos,
 	getJulianDate,
-	getT
+	getT,
+	eclipticToEquatorial,
+	getZenithPoint
 } = require("./utils");
 
 const getObliquity = require("./get-obliquity");
 const satellite = require("satellite.js");
-const gmst = satellite.gstime(time);
 
 //The process was from chapter 47 of the book Astronomical Algorithms V2
 function getMoonPosition(time = new Date()) {
@@ -317,32 +318,30 @@ function getMoonPosition(time = new Date()) {
 
 	//Gather final data
 	const { trueObliquity, longitudeNutation } = getObliquity(time);
-	const Eclipticlongitude = Lp + sumOfLongitudes / 10 ** 6 + longitudeNutation; //degrees + nutation
-	const Eclipticlatitude = sumOfLatitudes / 10 ** 6; //degrees
+	const EclipticLongitude = Lp + sumOfLongitudes / 10 ** 6 + longitudeNutation; //degrees + nutation
+	const EclipticLatitude = sumOfLatitudes / 10 ** 6; //degrees
 	const distance = 385000.56 + sumofDistances / 10 ** 3; //kilometers
 	//Equatorial Horizontal Parallax = EHP
 	const EHP = radToDeg(Math.asin(6378.14 / distance));
 
 	//converting from Ecliptic to Equatorial coordinates
-	const rightAscension = Math.atan2(
-		cos(Eclipticlatitude) * sin(Eclipticlongitude) * cos(trueObliquity) -
-			sin(Eclipticlatitude) * sin(trueObliquity),
-		cos(Eclipticlatitude) * cos(Eclipticlongitude)
-	);
-	const declination = Math.asin(
-		cos(trueObliquity) * sin(Eclipticlatitude) +
-			sin(trueObliquity) * cos(Eclipticlatitude) * sin(Eclipticlongitude)
+	const { rightAscension, declination } = eclipticToEquatorial(
+		EclipticLongitude,
+		EclipticLatitude,
+		trueObliquity
 	);
 
-	//gets sub-lunar point
-	const longitude = radToDeg(rightAscension - gmst);
-	const latitude = radToDeg(declination);
+	const { latitude, longitude } = getZenithPoint(
+		time,
+		rightAscension,
+		declination
+	);
 
 	return {
 		latitude,
 		longitude,
-		Eclipticlatitude,
-		Eclipticlongitude,
+		EclipticLatitude,
+		EclipticLongitude,
 		distance,
 		EHP
 	};

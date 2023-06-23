@@ -6,11 +6,11 @@ const {
 	cos,
 	arcSecToDeg,
 	normalizeAngle,
-	obliquity
+	eclipticToEquatorial,
+	getZenithPoint
 } = require("./utils");
-const satellite = require("satellite.js");
-
 const getObliquity = require("./get-obliquity");
+
 function getSunPosition(time) {
 	const JDE = getJulianDate(time);
 	const t = (JDE - 2451545) / 365250;
@@ -288,6 +288,7 @@ function getSunPosition(time) {
 	B /= 10 ** 8;
 	R /= 10 ** 8;
 
+	//Convert to degrees for rest of the calculation
 	L = radToDeg(L);
 	B = radToDeg(B);
 
@@ -310,29 +311,35 @@ function getSunPosition(time) {
 	const k = arcSecToDeg(20.49552);
 	const abberation = -((k * (a * (1 - e ** 2))) / R);
 
+	//Adding correction values to longitude
 	let apparentLongitude = lon + nutation + abberation;
-	//converting from Ecliptic to Equatorial coordinates
-	const rightAscension = Math.atan2(
-		cos(lat) * sin(apparentLongitude) * cos(trueObliquity) -
-			sin(lat) * sin(trueObliquity),
-		cos(lat) * cos(apparentLongitude)
-	);
 
-	const declination = Math.asin(
-		cos(trueObliquity) * sin(lat) +
-			sin(trueObliquity) * cos(lat) * sin(apparentLongitude)
-	);
-
+	//Normalizing angles from 0-360;
 	lon = normalizeAngle(lon);
 	apparentLongitude = normalizeAngle(apparentLongitude);
 
-	const gmst = satellite.gstime(time);
-	const latitude = radToDeg(declination);
-	const longitude = radToDeg(rightAscension - gmst);
-	console.dir({
+	//converting from Ecliptic to Equatorial coordinates
+	const { rightAscension, declination } = eclipticToEquatorial(
+		apparentLongitude,
+		lat,
+		trueObliquity
+	);
+
+	const { latitude, longitude } = getZenithPoint(
+		time,
+		rightAscension,
+		declination
+	);
+
+	return {
+		apparentLongitude,
+		lon,
+		rightAscension,
+		declination,
 		latitude,
-		longitude
-	});
+		longitude,
+		R
+	};
 }
 
 //for debugging

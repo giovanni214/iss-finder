@@ -1,6 +1,8 @@
 const fetch = (...args) =>
 	import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
+const satellite = require("satellite.js");
+
 function radToDeg(radians) {
 	return radians * (180 / Math.PI);
 }
@@ -41,21 +43,27 @@ function getT(JDE) {
 	return (JDE - 2451545) / 36525;
 }
 
-//literally just Earths axil tilt
-function obliquity(time) {
-	const n = getJulianDate(time) - 2451545;
-	//Julian centuries since J2000.0
-	const T = n / 36525;
-	const epsilon =
-		23.43929111 -
-		T *
-			(46.836769 / 3600 -
-				T *
-					(0.0001831 / 3600 +
-						T *
-							(0.0020034 / 3600 -
-								T * (0.576e-6 / 3600 - (T * 4.34e-8) / 3600))));
-	return epsilon;
+function eclipticToEquatorial(longitude, latitude, trueObliquity) {
+	//converting from Ecliptic to Equatorial coordinates
+	const rightAscension = Math.atan2(
+		cos(latitude) * sin(longitude) * cos(trueObliquity) -
+			sin(latitude) * sin(trueObliquity),
+		cos(latitude) * cos(longitude)
+	);
+
+	const declination = Math.asin(
+		cos(trueObliquity) * sin(latitude) +
+			sin(trueObliquity) * cos(latitude) * sin(longitude)
+	);
+
+	return { rightAscension, declination };
+}
+
+function getZenithPoint(time, rightAscension, declination) {
+	const gmst = satellite.gstime(time);
+	const latitude = radToDeg(declination);
+	const longitude = radToDeg(rightAscension - gmst);
+	return { latitude, longitude };
 }
 
 async function getTLE(link, name) {
@@ -77,6 +85,7 @@ module.exports = {
 	AuToKilometers,
 	getJulianDate,
 	getT,
-	obliquity,
+	eclipticToEquatorial,
+	getZenithPoint,
 	getTLE
 };
