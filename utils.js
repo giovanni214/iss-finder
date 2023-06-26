@@ -15,16 +15,24 @@ function normalizeAngle(angle) {
 	return angle - 360 * Math.floor(angle / 360);
 }
 
-//sin but in degrees instead of radians
+//All trig functions but in degrees :)
 function sin(x) {
 	x = degToRad(x);
 	return Math.sin(x);
 }
 
-//cos but in degrees instead of radians
 function cos(x) {
 	x = degToRad(x);
 	return Math.cos(x);
+}
+
+function acos(x) {
+	x = Math.acos(x);
+	return radToDeg(x);
+}
+
+function atan2(y, x) {
+	return radToDeg(Math.atan2(y, x));
 }
 
 function arcSecToDeg(x) {
@@ -37,6 +45,20 @@ function AuToKilometers(x) {
 
 function getJulianDate(date) {
 	return date / 86400000 + 2440587.5;
+}
+
+//mostly for testing
+function julianToDate(julian) {
+	const DAY = 86400000;
+	const UNIX_EPOCH_JULIAN_DATE = 2440587.5;
+	return new Date((Number(julian) - UNIX_EPOCH_JULIAN_DATE) * DAY);
+}
+
+//mostly for testing
+function addDays(date, days) {
+	var result = new Date(date);
+	result.setDate(result.getDate() + days);
+	return result;
 }
 
 function getT(JDE) {
@@ -56,13 +78,16 @@ function eclipticToEquatorial(longitude, latitude, trueObliquity) {
 			sin(trueObliquity) * cos(latitude) * sin(longitude)
 	);
 
-	return { rightAscension, declination };
+	return {
+		rightAscension: radToDeg(rightAscension),
+		declination: radToDeg(declination)
+	};
 }
 
 function getZenithPoint(time, rightAscension, declination) {
 	const gmst = satellite.gstime(time);
-	const latitude = radToDeg(declination);
-	const longitude = radToDeg(rightAscension - gmst);
+	const latitude = declination;
+	const longitude = radToDeg(degToRad(rightAscension) - gmst);
 	return { latitude, longitude };
 }
 
@@ -81,9 +106,13 @@ module.exports = {
 	normalizeAngle,
 	sin,
 	cos,
+	acos,
+	atan2,
 	arcSecToDeg,
 	AuToKilometers,
 	getJulianDate,
+	julianToDate,
+	addDays,
 	getT,
 	eclipticToEquatorial,
 	getZenithPoint,
