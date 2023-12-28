@@ -1,5 +1,15 @@
+const { radToDeg } = require("./math");
 const satellite = require("satellite.js");
-const { radToDeg, getTLE } = require("./utils");
+
+const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
+async function getTLE(link, name) {
+	let data = await (await fetch(link)).text();
+	data = data.split(/\r?\n/);
+	for (let i = 0; i < data.length; i++) data[i] = data[i].trim();
+	const startOfData = data.indexOf(name);
+	if (startOfData === -1) return;
+	return [data[startOfData + 1], data[startOfData + 2]];
+}
 
 class Satellite {
 	constructor(tle) {
@@ -47,17 +57,13 @@ class Satellite {
 		let missing = [];
 		const observerGdKeys = ["latitude", "longitude", "height"];
 		const locationKeys = Object.keys(location);
-		observerGdKeys.forEach(key => {
+		observerGdKeys.forEach((key) => {
 			if (!locationKeys.includes(key)) missing.push(key);
 		});
 
 		if (missing.length > 0) {
 			const missingStr = missing.join(", ");
-			throw new Error(
-				`Missing {${missingStr}} ${
-					missing.length === 1 ? "property" : "properties"
-				} from object.`
-			);
+			throw new Error(`Missing {${missingStr}} ${missing.length === 1 ? "property" : "properties"} from object.`);
 		}
 
 		if (!(startTime instanceof Date) || isNaN(startTime)) {
@@ -104,7 +110,7 @@ class Satellite {
 		}
 
 		//Checking to see if passes meet the elevation requirement
-		passes = passes.filter(pass => pass.peak > minElevationAngle);
+		passes = passes.filter((pass) => pass.peak > minElevationAngle);
 		return passes;
 	}
 }
@@ -112,10 +118,7 @@ class Satellite {
 //example function to predict the ISS
 async function predictISS() {
 	//ISS (ZARYA) from https://celestrak.org/NORAD/elements/gp.php?CATNR=25544
-	const tleData = await getTLE(
-		"https://celestrak.org/NORAD/elements/gp.php?CATNR=25544",
-		"ISS (ZARYA)"
-	);
+	const tleData = await getTLE("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544", "ISS (ZARYA)");
 	const iss = new Satellite(tleData);
 	const oneDayInMillis = 86400000;
 	const startTime = new Date();

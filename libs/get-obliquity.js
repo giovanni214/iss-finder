@@ -1,8 +1,9 @@
-const { sin, cos, getJulianDate, getT } = require("./utils");
+const { sin, cos } = require("./math");
+const { dateToJulian } = require("./dates");
 
 function getObliquity(time = new Date()) {
-	const JDE = getJulianDate(time); //julian date
-	const T = getT(JDE);
+	const JDE = dateToJulian(time);
+	const T = (JDE - 2451545) / 36525;
 
 	//Mean elongation of the Moon from the Sun
 	const D = 297.85036 + 445267.11148 * T - 0.0019142 * T ** 2 + T ** 3 / 189474;
@@ -11,15 +12,13 @@ function getObliquity(time = new Date()) {
 	const M = 357.52772 + 35999.05034 * T - 0.0001603 * T ** 2 - T ** 3 / 300000;
 
 	//Mean anomaly of the Moon
-	const Mp =
-		134.96298 + 477198.867398 * T + 0.0086972 * T ** 2 + T ** 3 / 56250;
+	const Mp = 134.96298 + 477198.867398 * T + 0.0086972 * T ** 2 + T ** 3 / 56250;
 
 	//Moon's argument of latitude
 	const F = 93.27191 + 483202.017538 * T - 0.0036825 * T ** 2 + T ** 3 / 327270;
 
 	//Longitude of the ascending node of the Moon's mean orbit on the ecliptic, measured from the mean equinox of the date
-	const Omega =
-		125.04452 - 1934.136261 * T + 0.0020708 * T ** 2 + T ** 3 / 450000;
+	const Omega = 125.04452 - 1934.136261 * T + 0.0020708 * T ** 2 + T ** 3 / 450000;
 
 	//Periodic terms for the nutation in longitude
 	//Nutation in Longitude = lonT
@@ -140,10 +139,7 @@ function getObliquity(time = new Date()) {
 		const term = lonT[i];
 		if (!term[6]) term[6] = 0;
 		sumOfLongitudes +=
-			(term[5] + term[6] * T) *
-			sin(
-				term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega
-			);
+			(term[5] + term[6] * T) * sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega);
 	}
 
 	for (let i = 0; i < oblT.length; i++) {
@@ -152,10 +148,7 @@ function getObliquity(time = new Date()) {
 		if (!term[6]) term[6] = 0;
 
 		sumOfObliquity +=
-			(term[5] + term[6] * T) *
-			cos(
-				term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega
-			);
+			(term[5] + term[6] * T) * cos(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega);
 	}
 
 	sumOfLongitudes /= 10 ** 4;

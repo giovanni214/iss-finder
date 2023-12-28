@@ -1,4 +1,4 @@
-const { sin, cos, acos, atan2, AuToKilometers } = require("./utils");
+const { sin, cos, acos, atan2, AuToKilometers } = require("./math");
 
 const getMoonPosition = require("./get-moon-position");
 const getSunPosition = require("./get-sun-position");
@@ -9,10 +9,7 @@ function getMoonPhase(time, findDirection = true) {
 	const sun = getSunPosition(time);
 
 	//Geocentric elongation of the Moon From the Sun
-	const elongation = acos(
-		cos(moon.EclipticLatitude) *
-			cos(moon.EclipticLongitude - sun.apparentLongitude)
-	);
+	const elongation = acos(cos(moon.EclipticLatitude) * cos(moon.EclipticLongitude - sun.apparentLongitude));
 
 	//Phase angle of the moon (i)
 	const R = AuToKilometers(sun.R);
@@ -23,13 +20,10 @@ function getMoonPhase(time, findDirection = true) {
 
 	//Position angle of the Moon's midpoint of illumination (x)
 	//This mumber can be used to calculate the tilt of the moon based off an observers language
-	const xNumerator =
-		cos(sun.declination) * sin(sun.rightAscension - moon.rightAscension);
+	const xNumerator = cos(sun.declination) * sin(sun.rightAscension - moon.rightAscension);
 	const xDenominator =
 		sin(sun.declination) * cos(moon.declination) -
-		cos(sun.declination) *
-			sin(moon.declination) *
-			cos(sun.rightAscension - moon.rightAscension);
+		cos(sun.declination) * sin(moon.declination) * cos(sun.rightAscension - moon.rightAscension);
 	let x = atan2(xNumerator, xDenominator);
 	if (x < 0) x += 360;
 

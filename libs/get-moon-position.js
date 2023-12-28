@@ -1,58 +1,51 @@
-const {
-	radToDeg,
-	normalizeAngle,
-	sin,
-	cos,
-	getJulianDate,
-	getT,
-	eclipticToEquatorial,
-	getZenithPoint
-} = require("./utils");
+const { radToDeg, normalizeAngle, sin, cos } = require("./math");
+const { greenwichTime, dateToJulian } = require("./dates");
+
+function eclipticToEquatorial(longitude, latitude, trueObliquity) {
+	const rightAscension = Math.atan2(
+		cos(latitude) * sin(longitude) * cos(trueObliquity) - sin(latitude) * sin(trueObliquity),
+		cos(latitude) * cos(longitude)
+	);
+
+	const declination = Math.asin(
+		cos(trueObliquity) * sin(latitude) + sin(trueObliquity) * cos(latitude) * sin(longitude)
+	);
+
+	return {
+		rightAscension: radToDeg(rightAscension),
+		declination: radToDeg(declination)
+	};
+}
+
+function getZenithPoint(time, rightAscension, declination) {
+	const gmst = greenwichTime(time);
+	const latitude = declination;
+	const longitude = radToDeg(degToRad(rightAscension) - gmst);
+	return { latitude, longitude };
+}
 
 const getObliquity = require("./get-obliquity");
-const satellite = require("satellite.js");
 
 //The process was from chapter 47 of the book Astronomical Algorithms V2
 //All variables are expressed in degrees
 function getMoonPosition(time = new Date()) {
-	const JDE = getJulianDate(time); //julian date
-	const T = getT(JDE);
+	const JDE = dateToJulian(time); //julian date
+	const T = (JDE - 2451545) / 36525;
 
 	//Moon's mean longitude
-	let Lp =
-		218.3164477 +
-		481267.88123421 * T -
-		0.0015786 * T ** 2 +
-		T ** 3 / 538841 -
-		T ** 4 / 65194000;
+	let Lp = 218.3164477 + 481267.88123421 * T - 0.0015786 * T ** 2 + T ** 3 / 538841 - T ** 4 / 65194000;
 
 	//Mean elongation of the Moon
-	let D =
-		297.8501921 +
-		445267.1114034 * T -
-		0.0018819 * T ** 2 +
-		T ** 3 / 545868 -
-		T ** 4 / 113065000;
+	let D = 297.8501921 + 445267.1114034 * T - 0.0018819 * T ** 2 + T ** 3 / 545868 - T ** 4 / 113065000;
 
 	//Sun's mean anomaly
-	let M =
-		357.5291092 + 35999.0502909 * T - 0.0001536 * T ** 2 + T ** 3 / 24490000;
+	let M = 357.5291092 + 35999.0502909 * T - 0.0001536 * T ** 2 + T ** 3 / 24490000;
 
 	//Moon's mean anomaly
-	let Mp =
-		134.9633964 +
-		477198.8675055 * T +
-		0.0087414 * T ** 2 +
-		T ** 3 / 69699 -
-		T ** 4 / 14712000;
+	let Mp = 134.9633964 + 477198.8675055 * T + 0.0087414 * T ** 2 + T ** 3 / 69699 - T ** 4 / 14712000;
 
 	//Moon's argument of latitude (mean distance of the Moon from its ascending node)
-	let F =
-		93.272095 +
-		483202.0175233 * T -
-		0.0036539 * T ** 2 -
-		T ** 3 / 3526000 +
-		T ** 4 / 863310000;
+	let F = 93.272095 + 483202.0175233 * T - 0.0036539 * T ** 2 - T ** 3 / 3526000 + T ** 4 / 863310000;
 
 	let A1 = 119.75 + 131.849 * T;
 	let A2 = 53.09 + 479264.29 * T;
@@ -270,10 +263,7 @@ function getMoonPosition(time = new Date()) {
 		const term = periodicLongitudes[i];
 		const eValue = getEfromM(term[1]);
 
-		sumOfLongitudes +=
-			term[4] *
-			eValue *
-			sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
+		sumOfLongitudes += term[4] * eValue * sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
 	}
 
 	//add latitudes with formula
@@ -281,10 +271,7 @@ function getMoonPosition(time = new Date()) {
 		const term = periodicLatitudes[i];
 		const eValue = getEfromM(term[1]);
 
-		sumOfLatitudes +=
-			term[4] *
-			eValue *
-			sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
+		sumOfLatitudes += term[4] * eValue * sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
 	}
 
 	//add distances with formula
@@ -292,10 +279,7 @@ function getMoonPosition(time = new Date()) {
 		const term = periodicDistances[i];
 		const eValue = getEfromM(term[1]);
 
-		sumofDistances +=
-			term[4] *
-			eValue *
-			cos(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
+		sumofDistances += term[4] * eValue * cos(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
 	}
 
 	sumOfLongitudes += 3958 * sin(A1); //Venus
@@ -317,17 +301,9 @@ function getMoonPosition(time = new Date()) {
 	const EHP = radToDeg(Math.asin(6378.14 / distanceKilometers));
 
 	//converting from Ecliptic to Equatorial coordinates
-	const { rightAscension, declination } = eclipticToEquatorial(
-		EclipticLongitude,
-		EclipticLatitude,
-		trueObliquity
-	);
+	const { rightAscension, declination } = eclipticToEquatorial(EclipticLongitude, EclipticLatitude, trueObliquity);
 
-	const { latitude, longitude } = getZenithPoint(
-		time,
-		rightAscension,
-		declination
-	);
+	const { latitude, longitude } = getZenithPoint(time, rightAscension, declination);
 
 	return {
 		latitude,

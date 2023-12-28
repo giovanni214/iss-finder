@@ -1,13 +1,21 @@
 const path = require("node:path");
-
 const { createCanvas, loadImage } = require("canvas");
 
 const express = require("express");
 const app = express();
 const port = 3000;
 
-const { getTLE } = require("./utils");
-const Satellite = require("./get-sat-position");
+const Satellite = require("./libs/sat");
+
+const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
+async function getTLE(link, name) {
+	let data = await (await fetch(link)).text();
+	data = data.split(/\r?\n/);
+	for (let i = 0; i < data.length; i++) data[i] = data[i].trim();
+	const startOfData = data.indexOf(name);
+	if (startOfData === -1) return;
+	return [data[startOfData + 1], data[startOfData + 2]];
+}
 
 function addMinutes(date, minutes) {
 	const dateCopy = new Date(date);
@@ -17,7 +25,7 @@ function addMinutes(date, minutes) {
 }
 
 function millerProjection(mapWidth, lat, lng) {
-	const toRadian = deg => (deg * Math.PI) / 180;
+	const toRadian = (deg) => (deg * Math.PI) / 180;
 
 	lng = toRadian(lng);
 	lat = toRadian(lat);
