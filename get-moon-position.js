@@ -13,11 +13,11 @@ const getObliquity = require("./get-obliquity");
 const satellite = require("satellite.js");
 
 //The process was from chapter 47 of the book Astronomical Algorithms V2
+//All variables are expressed in degrees
 function getMoonPosition(time = new Date()) {
 	const JDE = getJulianDate(time); //julian date
 	const T = getT(JDE);
 
-	//All variables are expressed in degrees
 	//Moon's mean longitude
 	let Lp =
 		218.3164477 +
@@ -61,7 +61,6 @@ function getMoonPosition(time = new Date()) {
 	//Eccentricty of the Earth's orbit around the Sun
 	const E = 1 - 0.002516 * T - 0.0000074 * T ** 2;
 
-	//converts to 0-360 system, allows for easier debugging
 	Lp = normalizeAngle(Lp);
 	D = normalizeAngle(D);
 	M = normalizeAngle(M);
@@ -71,11 +70,10 @@ function getMoonPosition(time = new Date()) {
 	A2 = normalizeAngle(A2);
 	A3 = normalizeAngle(A3);
 
-	//Table is [D, M, Mp, F, Coefficient]
-	//Periodic terms for the Moon's longitude
-	//Unit is in 0.000001 degree (10^-6)
-	//longitude terms = lonT
-	const lonT = [
+	//Table contains [D, M, Mp, F, Coefficient]
+	//This is a list of periodic terms for the Moon's longitude
+	//Values are represented in 0.000001 degree (10^-6)
+	const periodicLongitudes = [
 		[0, 0, 1, 0, 6288774],
 		[2, 0, -1, 0, 1274027],
 		[2, 0, 0, 0, 658314],
@@ -139,8 +137,7 @@ function getMoonPosition(time = new Date()) {
 
 	//Periodic terms for the distance of the Moon
 	//Unit is in 0.001 kilometers (10^-3)
-	//distanceTerms = disT
-	const disT = [
+	const periodicDistances = [
 		[0, 0, 1, 0, -20905355],
 		[2, 0, -1, 0, -3699111],
 		[2, 0, 0, 0, -2955968],
@@ -189,10 +186,9 @@ function getMoonPosition(time = new Date()) {
 		[2, 0, -1, -2, 8752]
 	];
 
-	//Perodic terms for the latitude of the moon
-	//Unit is in 0000001 degrees (10^-6)
-	//latitude terms = latT
-	const latT = [
+	//conatins a list of perodic terms for the latitude of the moon
+	//values are in 0.000001 degrees (10^-6)
+	const periodicLatitudes = [
 		[0, 0, 0, 1, 5128122],
 		[0, 0, 1, 1, 280602],
 		[0, 0, 1, -1, 277693],
@@ -255,7 +251,6 @@ function getMoonPosition(time = new Date()) {
 		[2, -2, 0, 1, 107]
 	];
 
-	//check if term of M is 2, if so make E --> E^2
 	function getEfromM(MCoefficient) {
 		let eValue;
 		const Mcoef = Math.abs(MCoefficient);
@@ -266,14 +261,13 @@ function getMoonPosition(time = new Date()) {
 		return eValue;
 	}
 
-	//Add values from the table
 	let sumOfLongitudes = 0;
 	let sumOfLatitudes = 0;
 	let sumofDistances = 0;
 
-	//sum longitudes
-	for (let i = 0; i < lonT.length; i++) {
-		const term = lonT[i];
+	//add longitudes with formula
+	for (let i = 0; i < periodicLongitudes.length; i++) {
+		const term = periodicLongitudes[i];
 		const eValue = getEfromM(term[1]);
 
 		sumOfLongitudes +=
@@ -282,9 +276,9 @@ function getMoonPosition(time = new Date()) {
 			sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
 	}
 
-	//sun latitudes
-	for (let i = 0; i < latT.length; i++) {
-		const term = latT[i];
+	//add latitudes with formula
+	for (let i = 0; i < periodicLatitudes.length; i++) {
+		const term = periodicLatitudes[i];
 		const eValue = getEfromM(term[1]);
 
 		sumOfLatitudes +=
@@ -293,9 +287,9 @@ function getMoonPosition(time = new Date()) {
 			sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
 	}
 
-	//sum distances
-	for (let i = 0; i < disT.length; i++) {
-		const term = disT[i];
+	//add distances with formula
+	for (let i = 0; i < periodicDistances.length; i++) {
+		const term = periodicDistances[i];
 		const eValue = getEfromM(term[1]);
 
 		sumofDistances +=
@@ -304,7 +298,6 @@ function getMoonPosition(time = new Date()) {
 			cos(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
 	}
 
-	//extra terms needed
 	sumOfLongitudes += 3958 * sin(A1); //Venus
 	sumOfLongitudes += 1962 * sin(Lp - F); //Flattening of Earth
 	sumOfLongitudes += 318 * sin(A2); //Jupiter
@@ -316,13 +309,12 @@ function getMoonPosition(time = new Date()) {
 	sumOfLatitudes += 127 * sin(Lp - Mp); //Flattening of Earth
 	sumOfLatitudes += -115 * sin(Lp + Mp); //Flattening of Earth
 
-	//Gather final data
 	const { trueObliquity, longitudeNutation } = getObliquity(time);
-	const EclipticLongitude = Lp + sumOfLongitudes / 10 ** 6 + longitudeNutation; //degrees + nutation
-	const EclipticLatitude = sumOfLatitudes / 10 ** 6; //degrees
-	const distance = 385000.56 + sumofDistances / 10 ** 3; //kilometers
+	const EclipticLongitude = Lp + sumOfLongitudes / 10 ** 6 + longitudeNutation;
+	const EclipticLatitude = sumOfLatitudes / 10 ** 6;
+	const distanceKilometers = 385000.56 + sumofDistances / 10 ** 3;
 	//Equatorial Horizontal Parallax = EHP
-	const EHP = radToDeg(Math.asin(6378.14 / distance));
+	const EHP = radToDeg(Math.asin(6378.14 / distanceKilometers));
 
 	//converting from Ecliptic to Equatorial coordinates
 	const { rightAscension, declination } = eclipticToEquatorial(
