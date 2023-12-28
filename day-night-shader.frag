@@ -91,8 +91,8 @@ void main() {
     if (angle >= NIGHT - 0.005) gl_FragColor = drawLine(gl_FragColor, angle, NIGHT, 0.01);
 
 
-   gl_FragColor = mapColorDay ;
-   if (gl_FragCoord.x > gl_FragCoord.y) {
-       gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0);
-    }
+    // gl_FragColor = mapColorDay ;
+    // if (gl_FragCoord.x > gl_FragCoord.y) {
+    //   gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0);
+    // }
 }
