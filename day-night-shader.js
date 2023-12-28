@@ -84,14 +84,6 @@ async function go() {
 	let slat = (latitude * Math.PI) / 180;
 	let slon = (longitude * Math.PI) / 180;
 	gl.uniform3f(sunLocation, Math.cos(slat) * Math.cos(slon), Math.cos(slat) * Math.sin(lon), Math.sin(slat));
-	// shader.set_uniform_vec3(
-	//     "u_sun_dir",
-	//     sfml::graphics::glsl::Vec3::new(
-	//         f32::cos(slat) * f32::cos(slon),
-	//         f32::cos(slat) * f32::sin(slon),
-	//         f32::sin(slat),
-	//     ),
-	// );
 
 	//set variables
 	gl.uniform2f(resLocation, width, height); //vec2
