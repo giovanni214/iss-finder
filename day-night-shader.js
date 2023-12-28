@@ -29,7 +29,7 @@ async function go() {
 	const gl = require("gl")(width, height);
 
 	gl.viewport(0, 0, width, height);
-	gl.clearColor(1, 0, 1, 1);
+	gl.clearColor(0, 0, 0, 1);
 
 	let vertexShader = gl.createShader(gl.VERTEX_SHADER);
 	gl.shaderSource(vertexShader, vertexSrc);
