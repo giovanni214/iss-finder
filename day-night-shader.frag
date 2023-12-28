@@ -1,4 +1,6 @@
-#version 120
+#ifdef GL_ES
+precision mediump float;
+#endif
 
 #define PI 3.141592653589793
 #define E 2.718281828459045
@@ -35,7 +37,7 @@ vec4 drawLine(vec4 inColor, float angle, float lineAngle, float angularWidth) {
 void main() {
     vec2 texCoord = gl_FragCoord.xy/u_resolution;
     vec4 mapColorDay = texture2D(u_map_day, texCoord);
-    vec4 mapColorNight = texture2D(u_map_night, texCoord);
+    vec4 mapColorNight = texture2D(u_map_night, vec2(0.0, 0.0));
 
 
     vec2 currLngLat = reverseEquirectangular(gl_FragCoord.xy);
@@ -87,4 +89,10 @@ void main() {
     if (angle >= NAUTICAL_TWILIGHT - 0.005) gl_FragColor = drawLine(gl_FragColor, angle, NAUTICAL_TWILIGHT, 0.01);
     if (angle >= ASTRONOMICAL_TWILIGHT - 0.005) gl_FragColor = drawLine(gl_FragColor, angle, ASTRONOMICAL_TWILIGHT, 0.01);
     if (angle >= NIGHT - 0.005) gl_FragColor = drawLine(gl_FragColor, angle, NIGHT, 0.01);
+
+
+   gl_FragColor = mapColorDay ;
+   if (gl_FragCoord.x > gl_FragCoord.y) {
+       gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0);
+    }
 }
