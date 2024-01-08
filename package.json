@@ -2,12 +2,7 @@
   "dependencies": {
     "canvas": "^2.11.2",
     "express": "^4.18.2",
-    "get-pixels": "^3.3.3",
-    "gl": "^6.0.2",
     "node-fetch": "^3.3.1",
     "satellite.js": "^5.0.0"
-  },
-  "devDependencies": {
-    "@types/gl": "^6.0.5"
   }
 }
