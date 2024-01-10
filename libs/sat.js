@@ -1,7 +1,6 @@
 const { radToDeg } = require("./math");
 const satellite = require("satellite.js");
 
-const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
 async function getTLE(link, name) {
 	let data = await (await fetch(link)).text();
 	data = data.split(/\r?\n/);
@@ -43,7 +42,7 @@ class Satellite {
 	const observerGd = {
 		longitude: satellite.degreesToRadians(-122.0308),
 		latitude: satellite.degreesToRadians(36.9613422),
-		height: 0.370
+		height: 0.370 //meters
 	};
 	*/
 	predict(

@@ -3,11 +3,10 @@ const { createCanvas, loadImage } = require("canvas");
 
 const express = require("express");
 const app = express();
-const port = 3000;
+const port = 5000;
 
 const Satellite = require("./libs/sat");
 
-const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
 async function getTLE(link, name) {
 	let data = await (await fetch(link)).text();
 	data = data.split(/\r?\n/);
@@ -24,18 +23,17 @@ function addMinutes(date, minutes) {
 	return dateCopy;
 }
 
-function millerProjection(mapWidth, lat, lng) {
-	const toRadian = (deg) => (deg * Math.PI) / 180;
+function equirectangularProjection(mapW, mapH, lat, lon) {
+	const sin = x => Math.sin(x * Math.PI/180)
+	const cos = x => Math.cos(x * Math.PI/180)
 
-	lng = toRadian(lng);
-	lat = toRadian(lat);
+	const xcirc = cos(lon)
+	const ycirc = sin(lon)
 
-	const scale = mapWidth / Math.PI / 2;
+	const lonBounded = Math.atan2(ycirc, xcirc) * 180 / Math.PI
 
-	// Miller Projection
-	const x = lng * scale;
-	const y = -1.25 * Math.log(Math.tan(Math.PI / 4 + 0.4 * lat)) * scale;
-
+	const x = lonBounded * (mapW / 360.0);
+	const y = - lat * (mapH / 180.0);
 	return [x, y];
 }
 
@@ -46,12 +44,12 @@ app.get("/map", async (__, res) => {
 	// 	"ISS (ZARYA)"
 	// );
 	const issTLE = [
-		"1 25544U 98067A   23164.01811053  .00012000  00000+0  21251-3 0  9991",
-		"2 25544  51.6423 349.1942 0005364  76.5424  61.7713 15.50711488401146"
+		"1 25544U 98067A   24010.04438150  .00013191  00000+0  23692-3 0  9991",
+		"2 25544  51.6415  23.8738 0003896  17.2441  77.4364 15.50212827433879"
 	];
 
 	//load images and screen
-	const mapImg = await loadImage(path.join(__dirname, "images", "map.jpg"));
+	const mapImg = await loadImage("http://localhost:3000/?lat=0&lon=0");
 	const issImg = await loadImage(path.join(__dirname, "images", "iss.png"));
 	const canvas = createCanvas(mapImg.width, mapImg.height);
 	const ctx = canvas.getContext("2d");
@@ -60,9 +58,9 @@ app.get("/map", async (__, res) => {
 	//predict the path of iss
 	const iss = new Satellite(issTLE);
 	const paths = [];
-	for (let i = 0; i < 60; i++) {
+	for (let i = 0; i < 100; i++) {
 		let issLoc = iss.getLocation(addMinutes(new Date(), i), "latlon");
-		issLoc = millerProjection(canvas.width, issLoc.latitude, issLoc.longitude);
+		issLoc = equirectangularProjection(mapImg.width, mapImg.height, issLoc.latitude, issLoc.longitude);
 		paths.push(issLoc);
 	}
 
