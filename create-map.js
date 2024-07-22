@@ -16,9 +16,9 @@ async function getTLE(link, name) {
 	return [data[startOfData + 1], data[startOfData + 2]];
 }
 
-function addMinutes(date, minutes) {
-	const dateCopy = new Date(date);
-	dateCopy.setMinutes(date.getMinutes() + minutes);
+function addSeconds(date, seconds) {
+  const dateCopy = new Date(date);
+	dateCopy.setSeconds(date.getSeconds() + seconds);
 
 	return dateCopy;
 }
@@ -38,6 +38,7 @@ function equirectangularProjection(mapW, mapH, lat, lon) {
 }
 
 app.get("/map", async (__, res) => {
+  let pointToAngle;
 	//get the latest iss TLE data
 	// const issTLE = await getTLE(
 	// 	"https://celestrak.org/NORAD/elements/gp.php?CATNR=25544",
@@ -58,8 +59,9 @@ app.get("/map", async (__, res) => {
 	//predict the path of iss
 	const iss = new Satellite(issTLE);
 	const paths = [];
-	for (let i = 0; i < 50; i++) {
-		let issLoc = iss.getLocation(addMinutes(new Date(), i), "latlon");
+  const currentTime = new Date();
+	for (let i = 0; i < 120 * 5; i++) {
+		let issLoc = iss.getLocation(addSeconds(currentTime, i * 5), "latlon");
 		issLoc = equirectangularProjection(mapImg.width, mapImg.height, issLoc.latitude, issLoc.longitude);
 		paths.push({ x: issLoc[0], y: issLoc[1] });
 	}
@@ -77,27 +79,9 @@ app.get("/map", async (__, res) => {
 		}
 	}
   ctx.lineWidth = 8;
+  ctx.strokeStyle = "rgba(200, 0, 0, 0.8)";
 	ctx.stroke();
-
-	//draw the circle the iss will go in
-	ctx.save();
-	ctx.beginPath();
-	ctx.fillStyle = "rgba(200, 200, 255, 0.3)";
-	ctx.arc(paths[0].x, paths[0].y, issImg.width / 2 + 20, 0, 2 * Math.PI); //circle
   ctx.lineWidth = 1;
-	ctx.stroke();
-	ctx.fill();
-	ctx.clip();
-
-	//point the iss in the direction it's going and draw it
-	ctx.save();
-	ctx.translate(paths[0].x, paths[0].y); //doing this so rotate works properly
-	let pointToAngle = Math.atan2(paths[5].y - paths[0].y, paths[5].x - paths[0].x) + Math.PI / 2;
-	ctx.rotate(pointToAngle);
-	ctx.drawImage(issImg, -issImg.width / 2, -issImg.height / 2); 
-	ctx.restore(); //Gets rid of translation needed for rotation
-  
-	ctx.restore(); //Escapes the clip used to fit circle in
 
   ctx.save()
   const lastPositions = [...paths].slice(-2); 
@@ -110,9 +94,27 @@ app.get("/map", async (__, res) => {
   ctx.lineTo(0, -16);
   ctx.lineTo(8, 0);
   ctx.closePath();
-  ctx.fill()
+  ctx.fillStyle = "rgba(200, 200, 0, 0.8)";
+  ctx.fill();
+  ctx.strokeStyle = "rgb(0, 0, 0)";
 
   ctx.restore(); //Escapes the translation for rotation
+
+	//draw the circle the iss will go in
+	ctx.save();
+	ctx.beginPath();
+	ctx.arc(paths[0].x, paths[0].y, issImg.width / 2 + 20, 0, 2 * Math.PI); //circle
+	ctx.clip();
+
+	//point the iss in the direction it's going and draw it
+	ctx.save();
+	ctx.translate(paths[0].x, paths[0].y); //doing this so rotate works properly
+	pointToAngle = Math.atan2(paths[5].y - paths[0].y, paths[5].x - paths[0].x) + Math.PI / 2;
+	ctx.rotate(pointToAngle);
+	ctx.drawImage(issImg, -issImg.width / 2, -issImg.height / 2); 
+	ctx.restore(); //Gets rid of translation needed for rotation
+  
+	ctx.restore(); //Escapes the clip used to fit ISS in circle
 
 	ctx.restore(); //Escapes translation to center of screen
 
