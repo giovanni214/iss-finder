@@ -24,16 +24,16 @@ function addMinutes(date, minutes) {
 }
 
 function equirectangularProjection(mapW, mapH, lat, lon) {
-	const sin = x => Math.sin(x * Math.PI/180)
-	const cos = x => Math.cos(x * Math.PI/180)
+	const sin = (x) => Math.sin((x * Math.PI) / 180);
+	const cos = (x) => Math.cos((x * Math.PI) / 180);
 
-	const xcirc = cos(lon)
-	const ycirc = sin(lon)
+	const xcirc = cos(lon);
+	const ycirc = sin(lon);
 
-	const lonBounded = Math.atan2(ycirc, xcirc) * 180 / Math.PI
+	const lonBounded = (Math.atan2(ycirc, xcirc) * 180) / Math.PI;
 
 	const x = lonBounded * (mapW / 360.0);
-	const y = - lat * (mapH / 180.0);
+	const y = -lat * (mapH / 180.0);
 	return [x, y];
 }
 
@@ -44,8 +44,8 @@ app.get("/map", async (__, res) => {
 	// 	"ISS (ZARYA)"
 	// );
 	const issTLE = [
-		"1 25544U 98067A   24010.04438150  .00013191  00000+0  23692-3 0  9991",
-		"2 25544  51.6415  23.8738 0003896  17.2441  77.4364 15.50212827433879"
+		"1 25544U 98067A   24203.84428501  .00019094  00000+0  33970-3 0  9990",
+		"2 25544  51.6390 143.6425 0010114  91.5697   3.9534 15.50124891463929"
 	];
 
 	//load images and screen
