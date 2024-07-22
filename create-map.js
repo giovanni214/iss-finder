@@ -58,10 +58,10 @@ app.get("/map", async (__, res) => {
 	//predict the path of iss
 	const iss = new Satellite(issTLE);
 	const paths = [];
-	for (let i = 0; i < 100; i++) {
+	for (let i = 0; i < 50; i++) {
 		let issLoc = iss.getLocation(addMinutes(new Date(), i), "latlon");
 		issLoc = equirectangularProjection(mapImg.width, mapImg.height, issLoc.latitude, issLoc.longitude);
-		paths.push(issLoc);
+		paths.push({ x: issLoc[0], y: issLoc[1] });
 	}
 
 	//draw the iss path
@@ -70,10 +70,10 @@ app.get("/map", async (__, res) => {
 	ctx.beginPath();
 	for (let i = 0; i < paths.length; i++) {
 		if (i === 0) {
-			ctx.moveTo(paths[i][0], paths[i][1]);
+			ctx.moveTo(paths[i].x, paths[i].y);
 		} else {
-			if (paths[i - 1][0] < paths[i][0]) ctx.lineTo(paths[i][0], paths[i][1]);
-			else ctx.moveTo(paths[i][0], paths[i][1]);
+			if (paths[i - 1].x < paths[i].x) ctx.lineTo(paths[i].x, paths[i].y);
+			else ctx.moveTo(paths[i].x, paths[i].y);
 		}
 	}
 	ctx.stroke();
@@ -82,22 +82,22 @@ app.get("/map", async (__, res) => {
 	ctx.save();
 	ctx.beginPath();
 	ctx.fillStyle = "rgba(200, 200, 255, 0.3)";
-	ctx.arc(paths[0][0], paths[0][1], issImg.width / 2 + 20, 0, 2 * Math.PI); //circle
+	ctx.arc(paths[0].x, paths[0].y, issImg.width / 2 + 20, 0, 2 * Math.PI); //circle
 	ctx.stroke();
 	ctx.fill();
 	ctx.clip();
 
 	//point the iss in the direction it's going and draw it
 	ctx.save();
-	ctx.translate(paths[0][0], paths[0][1]); //doing this so rotate works properly
-	let pointToAngle = Math.atan2(paths[3][1], paths[3][0]);
-	if (pointToAngle < 0) pointToAngle += 2 * Math.PI;
-	ctx.rotate(pointToAngle);
-	ctx.drawImage(issImg, -issImg.width / 2, -issImg.height / 2);
-	ctx.restore();
+	ctx.translate(paths[0].x, paths[0].y); //doing this so rotate works properly
+	let pointToAngle = Math.atan2(paths[5].y - paths[0].y, paths[5].x - paths[0].x);
+	ctx.rotate(pointToAngle + Math.PI / 2);
 
-	ctx.restore(); //seperated for clarity
-	ctx.restore();
+	ctx.drawImage(issImg, -issImg.width / 2, -issImg.height / 2);
+	ctx.restore(); //Gets rid of translation needed for rotation
+
+	ctx.restore(); //Escapes the clip used to fit circle in
+	ctx.restore(); //Escapes translation to center of screen
 
 	//send canvas to client
 	const stream = canvas.toBuffer("image/png", {
@@ -110,5 +110,5 @@ app.get("/map", async (__, res) => {
 
 //run the server on a port
 app.listen(port, () => {
-	console.log(`Running`);
+	console.log(`Running on port ${port}/map!`);
 });
