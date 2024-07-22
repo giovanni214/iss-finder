@@ -76,6 +76,7 @@ app.get("/map", async (__, res) => {
 			else ctx.moveTo(paths[i].x, paths[i].y);
 		}
 	}
+  ctx.lineWidth = 8;
 	ctx.stroke();
 
 	//draw the circle the iss will go in
@@ -83,6 +84,7 @@ app.get("/map", async (__, res) => {
 	ctx.beginPath();
 	ctx.fillStyle = "rgba(200, 200, 255, 0.3)";
 	ctx.arc(paths[0].x, paths[0].y, issImg.width / 2 + 20, 0, 2 * Math.PI); //circle
+  ctx.lineWidth = 1;
 	ctx.stroke();
 	ctx.fill();
 	ctx.clip();
@@ -90,13 +92,28 @@ app.get("/map", async (__, res) => {
 	//point the iss in the direction it's going and draw it
 	ctx.save();
 	ctx.translate(paths[0].x, paths[0].y); //doing this so rotate works properly
-	let pointToAngle = Math.atan2(paths[5].y - paths[0].y, paths[5].x - paths[0].x);
-	ctx.rotate(pointToAngle + Math.PI / 2);
-
-	ctx.drawImage(issImg, -issImg.width / 2, -issImg.height / 2);
+	let pointToAngle = Math.atan2(paths[5].y - paths[0].y, paths[5].x - paths[0].x) + Math.PI / 2;
+	ctx.rotate(pointToAngle);
+	ctx.drawImage(issImg, -issImg.width / 2, -issImg.height / 2); 
 	ctx.restore(); //Gets rid of translation needed for rotation
-
+  
 	ctx.restore(); //Escapes the clip used to fit circle in
+
+  ctx.save()
+  const lastPositions = [...paths].slice(-2); 
+  ctx.translate(lastPositions[1].x, lastPositions[1].y);
+  pointToAngle = Math.atan2(lastPositions[1].y - lastPositions[0].y, lastPositions[1].x - lastPositions[0].x) + Math.PI / 2
+  ctx.rotate(pointToAngle);
+  
+  ctx.beginPath();
+  ctx.moveTo(-8, 0);
+  ctx.lineTo(0, -16);
+  ctx.lineTo(8, 0);
+  ctx.closePath();
+  ctx.fill()
+
+  ctx.restore(); //Escapes the translation for rotation
+
 	ctx.restore(); //Escapes translation to center of screen
 
 	//send canvas to client
