@@ -1,4 +1,4 @@
-const { radToDeg, sin, cos, arcSecToDeg, normalizeAngle } = require("./math");
+const { degToRad, radToDeg, sin, cos, arcSecToDeg, normalizeAngle } = require("./math");
 const { greenwichTime, dateToJulian } = require("./dates");
 
 function eclipticToEquatorial(longitude, latitude, trueObliquity) {
@@ -20,7 +20,7 @@ function eclipticToEquatorial(longitude, latitude, trueObliquity) {
 function getZenithPoint(time, rightAscension, declination) {
 	const gmst = greenwichTime(time);
 	const latitude = declination;
-	const longitude = radToDeg(degToRad(rightAscension) - gmst);
+	const longitude = rightAscension - gmst;
 	return { latitude, longitude };
 }
 
@@ -326,11 +326,11 @@ function getSunPosition(time) {
 	const k = arcSecToDeg(20.49552);
 	const abberation = -((k * (a * (1 - e ** 2))) / R);
 
+  //Normalizing angles from 0-360;
+	lon = normalizeAngle(lon);
+
 	//Adding correction values to longitude
 	let apparentLongitude = lon + nutation + abberation;
-
-	//Normalizing angles from 0-360;
-	lon = normalizeAngle(lon);
 	apparentLongitude = normalizeAngle(apparentLongitude);
 
 	//converting from Ecliptic to Equatorial coordinates
@@ -339,8 +339,8 @@ function getSunPosition(time) {
 	const { latitude, longitude } = getZenithPoint(time, rightAscension, declination);
 
 	return {
+    lon,
 		apparentLongitude,
-		lon,
 		rightAscension,
 		declination,
 		latitude,

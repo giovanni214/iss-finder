@@ -6,6 +6,7 @@ const app = express();
 const port = 5000;
 
 const Satellite = require("./libs/sat");
+const getSunPosition = require("./libs/get-sun-position");
 
 async function getTLE(link, name) {
 	let data = await (await fetch(link)).text();
@@ -38,6 +39,7 @@ function equirectangularProjection(mapW, mapH, lat, lon) {
 }
 
 app.get("/map", async (__, res) => {
+  const currentTime = new Date();
   let pointToAngle;
 	//get the latest iss TLE data
 	// const issTLE = await getTLE(
@@ -49,8 +51,10 @@ app.get("/map", async (__, res) => {
 		"2 25544  51.6390 143.6425 0010114  91.5697   3.9534 15.50124891463929"
 	];
 
+  const {latitude, longitude} = getSunPosition(currentTime);
+
 	//load images and screen
-	const mapImg = await loadImage("http://localhost:3000/?lat=0&lon=0");
+	const mapImg = await loadImage(`http://localhost:3000/?lat=${latitude}&lon=${longitude}`);
 	const issImg = await loadImage(path.join(__dirname, "images", "iss.png"));
 	const canvas = createCanvas(mapImg.width, mapImg.height);
 	const ctx = canvas.getContext("2d");
@@ -59,8 +63,7 @@ app.get("/map", async (__, res) => {
 	//predict the path of iss
 	const iss = new Satellite(issTLE);
 	const paths = [];
-  const currentTime = new Date();
-	for (let i = 0; i < 120 * 5; i++) {
+	for (let i = 0; i < 120 * 9; i++) {
 		let issLoc = iss.getLocation(addSeconds(currentTime, i * 5), "latlon");
 		issLoc = equirectangularProjection(mapImg.width, mapImg.height, issLoc.latitude, issLoc.longitude);
 		paths.push({ x: issLoc[0], y: issLoc[1] });
@@ -83,18 +86,18 @@ app.get("/map", async (__, res) => {
 	ctx.stroke();
   ctx.lineWidth = 1;
 
+  //Draw Arrow to the "future" point
   ctx.save()
   const lastPositions = [...paths].slice(-2); 
   ctx.translate(lastPositions[1].x, lastPositions[1].y);
   pointToAngle = Math.atan2(lastPositions[1].y - lastPositions[0].y, lastPositions[1].x - lastPositions[0].x) + Math.PI / 2
   ctx.rotate(pointToAngle);
-  
   ctx.beginPath();
   ctx.moveTo(-8, 0);
   ctx.lineTo(0, -16);
   ctx.lineTo(8, 0);
   ctx.closePath();
-  ctx.fillStyle = "rgba(200, 200, 0, 0.8)";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
   ctx.fill();
   ctx.strokeStyle = "rgb(0, 0, 0)";
 
@@ -116,6 +119,12 @@ app.get("/map", async (__, res) => {
   
 	ctx.restore(); //Escapes the clip used to fit ISS in circle
 
+  //Draw the sun
+  const sunPosition = equirectangularProjection(mapImg.width, mapImg.height, latitude, longitude);
+  ctx.beginPath();
+  ctx.arc(sunPosition[0], sunPosition[1], 25, 0, Math.PI * 2);
+  ctx.fillStyle = "rgb(255, 255, 0)";
+  ctx.fill();
 	ctx.restore(); //Escapes translation to center of screen
 
 	//send canvas to client
