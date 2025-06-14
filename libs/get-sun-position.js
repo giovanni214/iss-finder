@@ -17,11 +17,17 @@ function eclipticToEquatorial(longitude, latitude, trueObliquity) {
 	};
 }
 
-function getZenithPoint(time, rightAscension, declination) {
-	const gmst = greenwichTime(time);
+function getZenithPoint(gmst, rightAscension, declination) {
+	// The geographic latitude of the point where the Sun is at zenith
 	const latitude = declination;
+
+	// The geographic longitude of that point
 	const longitude = rightAscension - gmst;
-	return { latitude, longitude };
+
+	return {
+		geographicLatitude: latitude,
+		geographicLongitude: normalizeAngle(longitude),
+	};
 }
 
 const getObliquity = require("./get-obliquity");
@@ -334,16 +340,25 @@ function getSunPosition(time) {
 	//converting from Ecliptic to Equatorial coordinates
 	const { rightAscension, declination } = eclipticToEquatorial(apparentLongitude, lat, trueObliquity);
 
-	const { latitude, longitude } = getZenithPoint(time, rightAscension, declination);
+	// 1. Calculate GMST once, using the correct Julian Day value.
+	const gmst = greenwichTime(JDE);
 
+	// 2. Pass the calculated gmst to the corrected getZenithPoint function.
+	const { geographicLatitude, geographicLongitude } = getZenithPoint(gmst, rightAscension, declination);
+
+	// Return a clearly named object with the final, useful values.
 	return {
-    lon,
-		apparentLongitude,
+		// The geographic coordinates for your map
+		latitude: geographicLatitude,
+		longitude: geographicLongitude,
+
+		// Equatorial coordinates (useful for astronomy)
 		rightAscension,
 		declination,
-		latitude,
-		longitude,
-		R
+
+		// Other useful info
+		distanceAU: R,
+		apparentEclipticLongitude: apparentLongitude,
 	};
 }
 
