@@ -1,27 +1,27 @@
-const { sin, cos } = require("./math");
+// CRITICAL FIX: Added arcSecToDeg to the import list
+const { sin, cos, arcSecToDeg } = require("./math");
 const { dateToJulian } = require("./dates");
 
 function getObliquity(time = new Date()) {
 	const JDE = dateToJulian(time);
 	const T = (JDE - 2451545) / 36525;
 
-	//Mean elongation of the Moon from the Sun
+	// Mean elongation of the Moon from the Sun
 	const D = 297.85036 + 445267.11148 * T - 0.0019142 * T ** 2 + T ** 3 / 189474;
 
-	//Mean anomaly of the Sun (Earth)
+	// Mean anomaly of the Sun (Earth)
 	const M = 357.52772 + 35999.05034 * T - 0.0001603 * T ** 2 - T ** 3 / 300000;
 
-	//Mean anomaly of the Moon
+	// Mean anomaly of the Moon
 	const Mp = 134.96298 + 477198.867398 * T + 0.0086972 * T ** 2 + T ** 3 / 56250;
 
-	//Moon's argument of latitude
+	// Moon's argument of latitude
 	const F = 93.27191 + 483202.017538 * T - 0.0036825 * T ** 2 + T ** 3 / 327270;
 
-	//Longitude of the ascending node of the Moon's mean orbit on the ecliptic, measured from the mean equinox of the date
+	// Longitude of the ascending node of the Moon's mean orbit on the ecliptic
 	const Omega = 125.04452 - 1934.136261 * T + 0.0020708 * T ** 2 + T ** 3 / 450000;
 
-	//Periodic terms for the nutation in longitude
-	//Nutation in Longitude = lonT
+	// Periodic terms for the nutation in longitude (Δψ)
 	const lonT = [
 		[0, 0, 0, 0, 1, -171996, -174.2],
 		[-2, 0, 0, 2, 2, -13187, -1.6],
@@ -85,12 +85,10 @@ function getObliquity(time = new Date()) {
 		[0, -1, 1, 2, 2, -3],
 		[2, -1, -1, 2, 2, -3],
 		[0, 0, 3, 2, 2, -3],
-		[2, -1, 0, 2, 2, -3]
+		[2, -1, 0, 2, 2, -3],
 	];
 
-	//Periodic terms for the nutation in obliquity
-	//Nutation in obliquity = oblT
-	//fix this
+	// Periodic terms for the nutation in obliquity (Δε)
 	const oblT = [
 		[0, 0, 0, 0, 1, 92025, 8.9],
 		[-2, 0, 0, 2, 2, 5736, -3.1],
@@ -129,7 +127,7 @@ function getObliquity(time = new Date()) {
 		[2, 0, 0, 0, 1, 3],
 		[-2, -1, 0, 2, 1, 3],
 		[-2, 0, 0, 0, 1, 3],
-		[0, 0, 2, 2, 1, 3]
+		[0, 0, 2, 2, 1, 3],
 	];
 
 	let sumOfLongitudes = 0; // in 0.0001"
@@ -139,7 +137,6 @@ function getObliquity(time = new Date()) {
 		const S_t = term[5] || 0;
 		const C_t = term[6] || 0;
 		const angle = term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega;
-		// This is now correct because your sin() expects degrees.
 		sumOfLongitudes += (S_t + C_t * T) * sin(angle);
 	}
 
@@ -147,16 +144,15 @@ function getObliquity(time = new Date()) {
 		const S_t = term[5] || 0;
 		const C_t = term[6] || 0;
 		const angle = term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega;
-		// This is now correct because your cos() expects degrees.
 		sumOfObliquity += (S_t + C_t * T) * cos(angle);
 	}
 
 	// Convert from 0.0001" to degrees
 	const longitudeNutation = sumOfLongitudes / 10000 / 3600;
 	const obliquityNutation = sumOfObliquity / 10000 / 3600;
-	
+
 	const U = T / 100;
-	// All coefficients are now consistently in degrees.
+	// Calculate Mean Obliquity of the Ecliptic (E0)
 	const E0 =
 		23.43929111 -
 		arcSecToDeg(4680.93) * U -
@@ -169,6 +165,8 @@ function getObliquity(time = new Date()) {
 		arcSecToDeg(27.87) * U ** 8 +
 		arcSecToDeg(5.79) * U ** 9 +
 		arcSecToDeg(2.45) * U ** 10;
+
+	// True Obliquity = Mean Obliquity + Nutation in Obliquity
 	const trueObliquity = E0 + obliquityNutation;
 
 	return { trueObliquity, longitudeNutation };
