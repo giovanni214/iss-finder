@@ -321,10 +321,8 @@ function getSunPosition(time) {
 	const nutation = longitudeNutation;
 
 	//correct for abberation
-	const e = 0.016708634 - 0.000042037 * T - 0.0000001267 * T ** 2;
-	const a = 1.000001018;
-	const k = arcSecToDeg(20.49552);
-	const abberation = -((k * (a * (1 - e ** 2))) / R);
+	const k = 20.49552; // Constant of aberration in arcseconds
+	const aberration = -arcSecToDeg(k) / R; // R is the distance in AU
 
   //Normalizing angles from 0-360;
 	lon = normalizeAngle(lon);
