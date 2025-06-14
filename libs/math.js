@@ -1,3 +1,6 @@
+function tan(x) { return Math.tan(degToRad(x)); }
+function asin(x) { return radToDeg(Math.asin(x)); }
+
 function radToDeg(radians) {
 	return radians * (180 / Math.PI);
 }
@@ -44,6 +47,7 @@ module.exports = {
   normalizeAngle,
   sin,
   cos,
+tan,asin,
   acos,
   atan2,
   arcSecToDeg,
