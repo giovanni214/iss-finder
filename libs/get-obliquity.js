@@ -96,7 +96,7 @@ function getObliquity(time = new Date()) {
 		[-2, 0, 0, 2, 2, 5736, -3.1],
 		[0, 0, 0, 2, 2, 977, -0.5],
 		[0, 0, 0, 0, 2, -895, 0.5],
-		[0, 1, 0, 0, 0, 54, -0.1],
+		[0, 1, 0, 0, 0, -87, 0.5],
 		[0, 0, 1, 0, 0, -7],
 		[-2, 1, 0, 2, 2, 224, -0.6],
 		[0, 0, 0, 2, 1, 200],
@@ -132,48 +132,46 @@ function getObliquity(time = new Date()) {
 		[0, 0, 2, 2, 1, 3]
 	];
 
-	let sumOfLongitudes = 0;
-	let sumOfObliquity = 0;
+	let sumOfLongitudes = 0; // in 0.0001"
+	let sumOfObliquity = 0; // in 0.0001"
 
-	for (let i = 0; i < lonT.length; i++) {
-		const term = lonT[i];
-		if (!term[6]) term[6] = 0;
-		sumOfLongitudes +=
-			(term[5] + term[6] * T) * sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega);
+	for (const term of lonT) {
+		const S_t = term[5] || 0;
+		const C_t = term[6] || 0;
+		const angle = term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega;
+		// This is now correct because your sin() expects degrees.
+		sumOfLongitudes += (S_t + C_t * T) * sin(angle);
 	}
 
-	for (let i = 0; i < oblT.length; i++) {
-		const term = oblT[i];
-		//check if we need to multiply by T
-		if (!term[6]) term[6] = 0;
-
-		sumOfObliquity +=
-			(term[5] + term[6] * T) * cos(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega);
+	for (const term of oblT) {
+		const S_t = term[5] || 0;
+		const C_t = term[6] || 0;
+		const angle = term[0] * D + term[1] * M + term[2] * Mp + term[3] * F + term[4] * Omega;
+		// This is now correct because your cos() expects degrees.
+		sumOfObliquity += (S_t + C_t * T) * cos(angle);
 	}
 
-	sumOfLongitudes /= 10 ** 4;
-	sumOfObliquity /= 10 ** 4;
-
+	// Convert from 0.0001" to degrees
+	const longitudeNutation = sumOfLongitudes / 10000 / 3600;
+	const obliquityNutation = sumOfObliquity / 10000 / 3600;
+	
 	const U = T / 100;
+	// All coefficients are now consistently in degrees.
 	const E0 =
-		23.439291 -
-		1.300258 * U -
-		1.55 * U ** 2 +
-		1999.25 * U ** 3 -
-		51.38 * U ** 4 -
-		249.67 * U ** 5 -
-		39.05 * U ** 6 +
-		7.12 * U ** 7 +
-		27.87 * U ** 8 +
-		5.79 * U ** 9 +
-		2.45 * U ** 10;
+		23.43929111 -
+		arcSecToDeg(4680.93) * U -
+		arcSecToDeg(1.55) * U ** 2 +
+		arcSecToDeg(1999.25) * U ** 3 -
+		arcSecToDeg(51.38) * U ** 4 -
+		arcSecToDeg(249.67) * U ** 5 -
+		arcSecToDeg(39.05) * U ** 6 +
+		arcSecToDeg(7.12) * U ** 7 +
+		arcSecToDeg(27.87) * U ** 8 +
+		arcSecToDeg(5.79) * U ** 9 +
+		arcSecToDeg(2.45) * U ** 10;
+	const trueObliquity = E0 + obliquityNutation;
 
-	//turns out these values are in arc seconds :|
-	sumOfLongitudes /= 3600;
-	sumOfObliquity /= 3600;
-
-	const trueObliquity = E0 + sumOfObliquity;
-	return { trueObliquity, longitudeNutation: sumOfLongitudes };
+	return { trueObliquity, longitudeNutation };
 }
 
 module.exports = getObliquity;
