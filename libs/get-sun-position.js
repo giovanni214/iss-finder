@@ -1,19 +1,19 @@
-const { degToRad, radToDeg, sin, cos, arcSecToDeg, normalizeAngle } = require("./math");
+const { sin, cos, arcSecToDeg, normalizeAngle, radToDeg, atan2, asin, tan } = require("./math");
 const { greenwichTime, dateToJulian } = require("./dates");
 
 function eclipticToEquatorial(longitude, latitude, trueObliquity) {
-	const rightAscension = Math.atan2(
-		cos(latitude) * sin(longitude) * cos(trueObliquity) - sin(latitude) * sin(trueObliquity),
-		cos(latitude) * cos(longitude)
+	const rightAscension = atan2(
+		sin(longitude) * cos(trueObliquity) - tan(latitude) * sin(trueObliquity),
+		cos(longitude)
 	);
 
-	const declination = Math.asin(
-		cos(trueObliquity) * sin(latitude) + sin(trueObliquity) * cos(latitude) * sin(longitude)
+	const declination = asin(
+		sin(latitude) * cos(trueObliquity) + cos(latitude) * sin(trueObliquity) * sin(longitude)
 	);
 
 	return {
-		rightAscension: radToDeg(rightAscension),
-		declination: radToDeg(declination)
+		rightAscension: normalizeAngle(rightAscension),
+		declination: declination, // Already in degrees
 	};
 }
 
