@@ -1,17 +1,20 @@
 const {degToRad} = require("./math")
 
-function greenwichTime(date) {
-	var tut1 = (date - 2451545.0) / 36525.0; //julian centuries from jan 1, 2000 12 h epoch
-	var temp =
-		-6.2e-6 * tut1 * tut1 * tut1 + 0.093104 * tut1 * tut1 + (876600.0 * 3600 + 8640184.812866) * tut1 + 67310.54841;
-	temp = (degToRad(temp) / 240.0) % Math.PI * 2; // 360/86400 = 1/240, to deg, to rad
+// It now takes the Julian Day as input
+function greenwichTime(jd) {
+	// 1. Calculate JD for the previous midnight
+	const jd0 = Math.floor(jd - 0.5) + 0.5;
+	// 2. Days since J2000.0
+	const d = jd - 2451545.0;
+	const d0 = jd0 - 2451545.0;
+	// 3. Julian centuries since J2000.0
+	const T = d / 36525.0;
 
-	//check quadrants
-	if (temp < 0.0) {
-		temp += Math.PI * 2;
-	}
+	// 4. Calculate GMST in degrees
+	let gmst = 280.46061837 + 360.98564736629 * d + 0.000387933 * T * T - (T * T * T) / 38710000;
 
-	return temp;
+	// 5. Normalize to 0-360 degrees
+	return gmst - 360 * Math.floor(gmst / 360);
 }
 
 function dateToJulian(date) {
