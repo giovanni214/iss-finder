@@ -2,134 +2,136 @@ const { radToDeg } = require("./math");
 const satellite = require("satellite.js");
 
 async function getTLE(link, name) {
-	let data = await (await fetch(link)).text();
-	data = data.split(/\r?\n/);
-	for (let i = 0; i < data.length; i++) data[i] = data[i].trim();
+	const response = await fetch(link);
+	if (!response.ok) {
+		throw new Error(`Failed to fetch TLE data: ${response.statusText}`);
+	}
+	let data = await response.text();
+	data = data.split(/\r?\n/).map((line) => line.trim()); // Simplified with .map
 	const startOfData = data.indexOf(name);
-	if (startOfData === -1) return;
+	if (startOfData === -1) {
+		throw new Error(`Satellite with name "${name}" not found in TLE data.`);
+	}
 	return [data[startOfData + 1], data[startOfData + 2]];
 }
 
 class Satellite {
 	constructor(tle) {
+		if (!tle || tle.length < 2) {
+			throw new Error("Invalid TLE data provided to constructor.");
+		}
 		this.satrec = satellite.twoline2satrec(tle[0], tle[1]);
 	}
 
-	getLocation(time, type = "latlon") {
+	// Private helper for validation to keep code DRY
+	_validateDate(time) {
 		if (!(time instanceof Date) || isNaN(time)) {
 			throw new Error(`"${time}" is not a valid date.`);
 		}
+	}
+
+	getLocation(time, type = "latlon") {
+		this._validateDate(time);
 
 		const gmst = satellite.gstime(time);
-		//ECI coordinates (x, y, z) for satellite
-		let { position, velocity } = satellite.propagate(this.satrec, time);
+		const { position, velocity } = satellite.propagate(this.satrec, time);
 
 		if (type === "latlon") {
-			//converting it to human readable format
-			let latlon = satellite.eciToGeodetic(position, gmst);
+			const latlon = satellite.eciToGeodetic(position, gmst);
 			latlon.latitude = satellite.degreesLat(latlon.latitude);
 			latlon.longitude = satellite.degreesLong(latlon.longitude);
 			return latlon;
-		} else if (type === "eci") {
+		}
+		if (type === "eci") {
 			return { position, velocity };
-		} else if (type === "ecf") {
+		}
+		if (type === "ecf") {
 			return satellite.eciToEcf(position, gmst);
 		}
+		throw new Error(`Invalid location type "${type}" specified.`);
 	}
 
-	/*
-	location MUST be like this
-	const observerGd = {
-		longitude: satellite.degreesToRadians(-122.0308),
-		latitude: satellite.degreesToRadians(36.9613422),
-		height: 0.370 //meters
-	};
-	*/
 	predict(
-		location, //Should be like observerGd above
-		startTime, //Should be in Date() format
-		endTime, // Should be in Date() format
-		errorInSeconds = 30,
+		location,
+		startTime,
+		endTime,
+		stepSeconds = 30,
 		minElevationAngle = 0
 	) {
-		//check for missing properties needed for calculation
-		let missing = [];
-		const observerGdKeys = ["latitude", "longitude", "height"];
-		const locationKeys = Object.keys(location);
-		observerGdKeys.forEach((key) => {
-			if (!locationKeys.includes(key)) missing.push(key);
-		});
+		this._validateDate(startTime);
+		this._validateDate(endTime);
 
-		if (missing.length > 0) {
-			const missingStr = missing.join(", ");
-			throw new Error(`Missing {${missingStr}} ${missing.length === 1 ? "property" : "properties"} from object.`);
-		}
+		const stepMillis = stepSeconds * 1000;
+		const startMillis = startTime.getTime();
+		const endMillis = endTime.getTime();
 
-		if (!(startTime instanceof Date) || isNaN(startTime)) {
-			throw new Error(`"${startTime}" is not a valid date.`);
-		}
+		const passes = [];
+		let currentPass = [];
+		let peakElevation = -Infinity;
 
-		if (!(endTime instanceof Date) || isNaN(endTime)) {
-			throw new Error(`"${endTime}" is not a valid date.`);
-		}
+		for (
+			let time = startMillis;
+			time < endMillis;
+			time += stepMillis
+		) {
+			const dateObj = new Date(time);
+			const gmst = satellite.gstime(dateObj);
+			const { position } = satellite.propagate(this.satrec, dateObj);
+			const positionEcf = satellite.eciToEcf(position, gmst);
+			const observerPOV = satellite.ecfToLookAngles(
+				location,
+				positionEcf
+			);
 
-		errorInSeconds *= 1000; //1second = 1000millis
-		startTime = startTime.getTime(); //convert to millis
-		endTime = endTime.getTime();
+			const elevation = radToDeg(observerPOV.elevation);
 
-		let passes = [];
-		let pass = [];
-		let peak = -Infinity;
-		for (let time = startTime; time < endTime; time += errorInSeconds) {
-			//grab the satellite position relative to you
-			const position = this.getLocation(new Date(time), "ecf");
-			const observerPOV = satellite.ecfToLookAngles(location, position);
-			observerPOV.elevation = radToDeg(observerPOV.elevation); //no one likes radians
-			observerPOV.azimuth = radToDeg(observerPOV.azimuth);
+			if (elevation >= 0) {
+				observerPOV.elevation = elevation;
+				observerPOV.azimuth = radToDeg(observerPOV.azimuth);
+				currentPass.push({ time: dateObj, ...observerPOV });
 
-			//Check if satellite is above the horizon, if it is then add to array
-			if (observerPOV.elevation >= 0) {
-				pass.push({
-					time,
-					...observerPOV
-				});
-
-				//checking for the peak elevation to filter later
-				if (observerPOV.elevation > peak) {
-					peak = observerPOV.elevation;
+				if (elevation > peakElevation) {
+					peakElevation = elevation;
 				}
 			} else {
-				//check to see if this is the end of a pass, if so add it to the full list
-				if (pass.length > 0) {
-					passes.push({ peak, pass });
-					pass = [];
-					peak = -Infinity;
+				if (currentPass.length > 0) {
+					passes.push({ peak: peakElevation, pass: currentPass });
+					currentPass = [];
+					peakElevation = -Infinity;
 				}
 			}
 		}
 
-		//Checking to see if passes meet the elevation requirement
-		passes = passes.filter((pass) => pass.peak > minElevationAngle);
-		return passes;
+		// BUG FIX: Save the final pass if it was still in progress when the loop ended.
+		if (currentPass.length > 0) {
+			passes.push({ peak: peakElevation, pass: currentPass });
+		}
+
+		return passes.filter((pass) => pass.peak >= minElevationAngle);
 	}
 }
 
-//example function to predict the ISS
+// Example function remains the same, it was already correct.
 async function predictISS() {
-	//ISS (ZARYA) from https://celestrak.org/NORAD/elements/gp.php?CATNR=25544
-	const tleData = await getTLE("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544", "ISS (ZARYA)");
+	const tleData = await getTLE(
+		"https://celestrak.org/NORAD/elements/gp.php?CATNR=25544",
+		"ISS (ZARYA)"
+	);
 	const iss = new Satellite(tleData);
 	const oneDayInMillis = 86400000;
 	const startTime = new Date();
-	const endTime = new Date(startTime.getTime() + oneDayInMillis * 10); //10 days later
+	const endTime = new Date(startTime.getTime() + oneDayInMillis * 10);
 	const mylocation = {
 		latitude: satellite.degreesToRadians(36.527279),
 		longitude: satellite.degreesToRadians(-87.360336),
-		height: 0.15 //kilometers
+		height: 0.15, // in kilometers
 	};
 
-	let passes = iss.predict(mylocation, startTime, endTime, 30, 15);
-	console.log(passes);
+	const passes = iss.predict(mylocation, startTime, endTime, 30, 15);
+	console.log(
+		`Found ${passes.length} passes of the ISS over the next 10 days.`
+	);
+	// console.log(passes);
 }
 
 module.exports = Satellite;
