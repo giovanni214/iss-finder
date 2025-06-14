@@ -1,68 +1,51 @@
-const { radToDeg, normalizeAngle, sin, cos } = require("./math");
+const { sin, cos, arcSecToDeg, normalizeAngle, radToDeg, atan2, asin, tan } = require("./math");
 const { greenwichTime, dateToJulian } = require("./dates");
+const getObliquity = require("./get-obliquity");
 
+// Using the consistent, degree-based version for clarity
 function eclipticToEquatorial(longitude, latitude, trueObliquity) {
-	const rightAscension = Math.atan2(
-		cos(latitude) * sin(longitude) * cos(trueObliquity) - sin(latitude) * sin(trueObliquity),
-		cos(latitude) * cos(longitude)
+	const rightAscension = atan2(
+		sin(longitude) * cos(trueObliquity) - tan(latitude) * sin(trueObliquity),
+		cos(longitude)
 	);
 
-	const declination = Math.asin(
-		cos(trueObliquity) * sin(latitude) + sin(trueObliquity) * cos(latitude) * sin(longitude)
-	);
+	const declination = asin(sin(latitude) * cos(trueObliquity) + cos(latitude) * sin(trueObliquity) * sin(longitude));
 
 	return {
-		rightAscension: radToDeg(rightAscension),
-		declination: radToDeg(declination)
+		rightAscension: normalizeAngle(rightAscension),
+		declination: declination,
 	};
 }
 
-function getZenithPoint(time, rightAscension, declination) {
-	const gmst = greenwichTime(time);
+// Corrected to accept a pre-calculated GMST value
+function getZenithPoint(gmst, rightAscension, declination) {
 	const latitude = declination;
-	const longitude = radToDeg(degToRad(rightAscension) - gmst);
-	return { latitude, longitude };
+	const longitude = rightAscension - gmst; // Simple subtraction in degrees
+
+	return {
+		geographicLatitude: latitude,
+		geographicLongitude: normalizeAngle(longitude),
+	};
 }
 
-const getObliquity = require("./get-obliquity");
-
-//The process was from chapter 47 of the book Astronomical Algorithms V2
-//All variables are expressed in degrees
+// The process was from chapter 47 of the book Astronomical Algorithms V2
 function getMoonPosition(time = new Date()) {
-	const JDE = dateToJulian(time); //julian date
+	const JDE = dateToJulian(time);
 	const T = (JDE - 2451545) / 36525;
 
-	//Moon's mean longitude
-	let Lp = 218.3164477 + 481267.88123421 * T - 0.0015786 * T ** 2 + T ** 3 / 538841 - T ** 4 / 65194000;
+	// Fundamental Arguments (in degrees)
+	const Lp = 218.3164477 + 481267.88123421 * T - 0.0015786 * T ** 2 + T ** 3 / 538841 - T ** 4 / 65194000;
+	const D = 297.8501921 + 445267.1114034 * T - 0.0018819 * T ** 2 + T ** 3 / 545868 - T ** 4 / 113065000;
+	const M = 357.5291092 + 35999.0502909 * T - 0.0001536 * T ** 2 + T ** 3 / 24490000;
+	const Mp = 134.9633964 + 477198.8675055 * T + 0.0087414 * T ** 2 + T ** 3 / 69699 - T ** 4 / 14712000;
+	const F = 93.272095 + 483202.0175233 * T - 0.0036539 * T ** 2 - T ** 3 / 3526000 + T ** 4 / 863310000;
 
-	//Mean elongation of the Moon
-	let D = 297.8501921 + 445267.1114034 * T - 0.0018819 * T ** 2 + T ** 3 / 545868 - T ** 4 / 113065000;
+	// Additional arguments for planetary perturbations
+	const A1 = normalizeAngle(119.75 + 131.849 * T);
+	const A2 = normalizeAngle(53.09 + 479264.29 * T);
+	const A3 = normalizeAngle(313.45 + 481266.484 * T);
 
-	//Sun's mean anomaly
-	let M = 357.5291092 + 35999.0502909 * T - 0.0001536 * T ** 2 + T ** 3 / 24490000;
-
-	//Moon's mean anomaly
-	let Mp = 134.9633964 + 477198.8675055 * T + 0.0087414 * T ** 2 + T ** 3 / 69699 - T ** 4 / 14712000;
-
-	//Moon's argument of latitude (mean distance of the Moon from its ascending node)
-	let F = 93.272095 + 483202.0175233 * T - 0.0036539 * T ** 2 - T ** 3 / 3526000 + T ** 4 / 863310000;
-
-	let A1 = 119.75 + 131.849 * T;
-	let A2 = 53.09 + 479264.29 * T;
-	let A3 = 313.45 + 481266.484 * T;
-
-	//Eccentricty of the Earth's orbit around the Sun
 	const E = 1 - 0.002516 * T - 0.0000074 * T ** 2;
-
-	Lp = normalizeAngle(Lp);
-	D = normalizeAngle(D);
-	M = normalizeAngle(M);
-	Mp = normalizeAngle(Mp);
-	F = normalizeAngle(F);
-	A1 = normalizeAngle(A1);
-	A2 = normalizeAngle(A2);
-	A3 = normalizeAngle(A3);
-
 	//Table contains [D, M, Mp, F, Coefficient]
 	//This is a list of periodic terms for the Moon's longitude
 	//Values are represented in 0.000001 degree (10^-6)
@@ -244,76 +227,62 @@ function getMoonPosition(time = new Date()) {
 		[2, -2, 0, 1, 107]
 	];
 
+	// Helper function for eccentricity factor, kept within this scope
 	function getEfromM(MCoefficient) {
-		let eValue;
 		const Mcoef = Math.abs(MCoefficient);
-		if (Mcoef === 2) eValue = E ** 2;
-		else if (Mcoef === 1) eValue = E;
-		else eValue = 1;
-
-		return eValue;
+		if (Mcoef === 2) return E * E;
+		if (Mcoef === 1) return E;
+		return 1;
 	}
 
-	let sumOfLongitudes = 0;
-	let sumOfLatitudes = 0;
-	let sumofDistances = 0;
+	let sumOfLongitudes = 0, sumOfLatitudes = 0, sumOfDistances = 0;
 
-	//add longitudes with formula
-	for (let i = 0; i < periodicLongitudes.length; i++) {
-		const term = periodicLongitudes[i];
-		const eValue = getEfromM(term[1]);
-
-		sumOfLongitudes += term[4] * eValue * sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
+	for (const term of periodicLongitudes) {
+		sumOfLongitudes += term[4] * getEfromM(term[1]) * sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
+	}
+	for (const term of periodicLatitudes) {
+		sumOfLatitudes += term[4] * getEfromM(term[1]) * sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
+	}
+	for (const term of periodicDistances) {
+		sumOfDistances += term[4] * getEfromM(term[1]) * cos(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
 	}
 
-	//add latitudes with formula
-	for (let i = 0; i < periodicLatitudes.length; i++) {
-		const term = periodicLatitudes[i];
-		const eValue = getEfromM(term[1]);
-
-		sumOfLatitudes += term[4] * eValue * sin(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
-	}
-
-	//add distances with formula
-	for (let i = 0; i < periodicDistances.length; i++) {
-		const term = periodicDistances[i];
-		const eValue = getEfromM(term[1]);
-
-		sumofDistances += term[4] * eValue * cos(term[0] * D + term[1] * M + term[2] * Mp + term[3] * F);
-	}
-
-	sumOfLongitudes += 3958 * sin(A1); //Venus
-	sumOfLongitudes += 1962 * sin(Lp - F); //Flattening of Earth
-	sumOfLongitudes += 318 * sin(A2); //Jupiter
-
-	sumOfLatitudes += -2235 * sin(Lp); //Flattening of Earth
-	sumOfLatitudes += 382 * sin(A3); //not sure lol
-	sumOfLatitudes += 175 * sin(A1 - F); //Venus
-	sumOfLatitudes += 175 * sin(A1 + F); //Venus
-	sumOfLatitudes += 127 * sin(Lp - Mp); //Flattening of Earth
-	sumOfLatitudes += -115 * sin(Lp + Mp); //Flattening of Earth
+	// Add additional terms
+	sumOfLongitudes += 3958 * sin(A1) + 1962 * sin(Lp - F) + 318 * sin(A2);
+	sumOfLatitudes += -2235 * sin(Lp) + 382 * sin(A3) + 175 * sin(A1 - F) + 175 * sin(A1 + F) + 127 * sin(Lp - Mp) - 115 * sin(Lp + Mp);
 
 	const { trueObliquity, longitudeNutation } = getObliquity(time);
-	const EclipticLongitude = Lp + sumOfLongitudes / 10 ** 6 + longitudeNutation;
-	const EclipticLatitude = sumOfLatitudes / 10 ** 6;
-	const distanceKilometers = 385000.56 + sumofDistances / 10 ** 3;
-	//Equatorial Horizontal Parallax = EHP
-	const EHP = radToDeg(Math.asin(6378.14 / distanceKilometers));
 
-	//converting from Ecliptic to Equatorial coordinates
-	const { rightAscension, declination } = eclipticToEquatorial(EclipticLongitude, EclipticLatitude, trueObliquity);
+	// Final calculations for ecliptic coordinates and distance
+	const eclipticLongitude = normalizeAngle(Lp + sumOfLongitudes / 1e6 + longitudeNutation);
+	const eclipticLatitude = sumOfLatitudes / 1e6;
+	const distanceKilometers = 385000.56 + sumOfDistances / 1e3;
 
-	const { latitude, longitude } = getZenithPoint(time, rightAscension, declination);
+	// Equatorial Horizontal Parallax
+	const EHP = asin(6378.14 / distanceKilometers);
+
+	const { rightAscension, declination } = eclipticToEquatorial(eclipticLongitude, eclipticLatitude, trueObliquity);
+
+	// --- FINAL FIX APPLIED HERE ---
+	const gmst = greenwichTime(JDE);
+	const { geographicLatitude, geographicLongitude } = getZenithPoint(gmst, rightAscension, declination);
 
 	return {
-		latitude,
-		longitude,
+		// Geographic coordinates for your map
+		latitude: geographicLatitude,
+		longitude: geographicLongitude,
+
+		// Equatorial coordinates (RA/Dec)
 		rightAscension,
 		declination,
-		EclipticLatitude,
-		EclipticLongitude,
-		distance,
-		EHP
+
+		// Ecliptic coordinates
+		eclipticLatitude,
+		eclipticLongitude,
+
+		// Other useful info
+		distanceKm: distanceKilometers, // FIX: Corrected variable name
+		horizontalParallax: EHP,
 	};
 }
 
