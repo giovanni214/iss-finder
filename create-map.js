@@ -1,15 +1,20 @@
 const path = require("node:path");
 const { createCanvas, loadImage } = require("canvas");
-const express = require("express");
-const Satellite = require("./libs/sat");
-const getSunPosition = require("./libs/get-sun-position");
 
+const express = require("express");
 const app = express();
 const port = 5000;
 
-// --- TLE Fetching (Unchanged) ---
+const Satellite = require("./libs/sat");
+const getSunPosition = require("./libs/get-sun-position");
+
 async function getTLE(link, name) {
-	// ... (your existing TLE code)
+	let data = await (await fetch(link)).text();
+	data = data.split(/\r?\n/);
+	for (let i = 0; i < data.length; i++) data[i] = data[i].trim();
+	const startOfData = data.indexOf(name);
+	if (startOfData === -1) return;
+	return [data[startOfData + 1], data[startOfData + 2]];
 }
 
 function addSeconds(date, seconds) {
@@ -18,113 +23,146 @@ function addSeconds(date, seconds) {
 	return dateCopy;
 }
 
-// --- CORRECTED PROJECTION FUNCTION ---
-/**
- * Converts latitude and longitude to pixel X, Y coordinates
- * relative to the CENTER of the map.
- */
-function latLonToXY(mapW, mapH, lat, lon) {
-	// The x coordinate is the longitude mapped to the width
-	const x = (lon / 180) * (mapW / 2);
-	// The y coordinate is the latitude mapped to the height
-	const y = (lat / 90) * (mapH / 2);
-	return { x, y };
+// FIX #1: This function now correctly returns coordinates relative to the center.
+function equirectangularProjection(mapW, mapH, lat, lon) {
+	// This part of your logic is fine for ensuring longitude is within -180 to 180
+	const sin = (x) => Math.sin((x * Math.PI) / 180);
+	const cos = (x) => Math.cos((x * Math.PI) / 180);
+	const xcirc = cos(lon);
+	const ycirc = sin(lon);
+	const lonBounded = (Math.atan2(ycirc, xcirc) * 180) / Math.PI;
+
+	// The change is here: we map the longitude to half the map width
+	// and latitude to half the map height.
+	const x = lonBounded * (mapW / 360.0);
+	const y = -lat * (mapH / 180.0);
+	return [x, y];
 }
 
 app.get("/map", async (__, res) => {
 	const currentTime = new Date();
-
-	// Using a hardcoded TLE for stability, as you did
+	let pointToAngle;
+	//get the latest iss TLE data
+	// const issTLE = await getTLE(
+	// 	"https://celestrak.org/NORAD/elements/gp.php?CATNR=25544",
+	// 	"ISS (ZARYA)"
+	// );
 	const issTLE = [
 		"1 25544U 98067A   24203.84428501  .00019094  00000+0  33970-3 0  9990",
 		"2 25544  51.6390 143.6425 0010114  91.5697   3.9534 15.50124891463929",
 	];
 
-	// 1. Get Sun Position for the background map
-	const { latitude: sunLat, longitude: sunLon } = getSunPosition(currentTime);
+	const { latitude, longitude } = getSunPosition(currentTime);
 
-	// 2. Load images
+	//load images and screen
 	const mapImg = await loadImage(
-		`http://localhost:3000/?lat=${sunLat}&lon=${sunLon}`
+		`http://localhost:3000/?lat=${latitude}&lon=${longitude}`
 	);
 	const issImg = await loadImage(path.join(__dirname, "images", "iss.png"));
 	const canvas = createCanvas(mapImg.width, mapImg.height);
 	const ctx = canvas.getContext("2d");
-
-	// 3. Draw the background map
 	ctx.drawImage(mapImg, 0, 0);
 
-	// 4. Prepare the canvas for centered drawing
-	// This is the key: we do this ONCE and all subsequent coordinates are relative to the center.
-	ctx.translate(canvas.width / 2, canvas.height / 2);
-
-	// 5. Calculate the ISS orbital path
+	//predict the path of iss
 	const iss = new Satellite(issTLE);
 	const paths = [];
-	const orbitMinutes = 90; // Calculate one full orbit
-	const stepSeconds = 30; // A point every 30 seconds
-	for (let i = 0; i < (orbitMinutes * 60) / stepSeconds; i++) {
-		const time = addSeconds(currentTime, i * stepSeconds);
-		const issLoc = iss.getLocation(time, "latlon");
-		paths.push(latLonToXY(mapImg.width, mapImg.height, issLoc.latitude, issLoc.longitude));
+	for (let i = 0; i < 120 * 9; i++) {
+		let issLoc = iss.getLocation(addSeconds(currentTime, i * 5), "latlon");
+		issLoc = equirectangularProjection(
+			mapImg.width,
+			mapImg.height,
+			issLoc.latitude,
+			issLoc.longitude
+		);
+		paths.push({ x: issLoc[0], y: issLoc[1] });
 	}
 
-	// 6. Draw the ISS path correctly
+	//draw the iss path
+	ctx.save();
+	// FIX #2: Translate the canvas origin to the center. All subsequent drawing
+	// will now correctly use the centered coordinates from your projection function.
+	ctx.translate(canvas.width / 2, canvas.height / 2);
 	ctx.beginPath();
-	ctx.moveTo(paths[0].x, paths[0].y);
-	for (let i = 1; i < paths.length; i++) {
-		const p1 = paths[i - 1];
-		const p2 = paths[i];
-		// Check for map wrap-around by seeing if the x-distance is huge
-		if (Math.abs(p2.x - p1.x) > canvas.width / 2) {
-			ctx.moveTo(p2.x, p2.y); // Start a new line segment
+	for (let i = 0; i < paths.length; i++) {
+		if (i === 0) {
+			ctx.moveTo(paths[i].x, paths[i].y);
 		} else {
-			ctx.lineTo(p2.x, p2.y); // Continue the current line
+			// FIX #3: Check for a large jump in x-distance to handle map wrapping.
+			if (Math.abs(paths[i].x - paths[i - 1].x) > canvas.width * 0.9) {
+				ctx.moveTo(paths[i].x, paths[i].y); // Lift the pen and move
+			} else {
+				ctx.lineTo(paths[i].x, paths[i].y); // Continue drawing the line
+			}
 		}
 	}
-	ctx.lineWidth = 3;
-	ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+	ctx.lineWidth = 8;
+	ctx.strokeStyle = "rgba(200, 0, 0, 0.8)";
 	ctx.stroke();
+	ctx.lineWidth = 1;
 
-	// 7. Draw the Sun icon
-	const sunPosition = latLonToXY(mapImg.width, mapImg.height, sunLat, sunLon);
-	ctx.beginPath();
-	ctx.arc(sunPosition.x, sunPosition.y, 10, 0, Math.PI * 2);
-	ctx.fillStyle = "rgba(255, 255, 0, 0.8)";
-	ctx.fill();
-
-	// 8. Draw the ISS icon and its arrow
-	const issCurrentPos = paths[0];
-	const issNextPos = paths[1];
-
-	// Calculate rotation angle to point the ISS in its direction of travel
-	const angle = Math.atan2(
-		issNextPos.y - issCurrentPos.y,
-		issNextPos.x - issCurrentPos.x
-	);
-
+	//Draw Arrow to the "future" point
 	ctx.save();
-	ctx.translate(issCurrentPos.x, issCurrentPos.y);
-	ctx.rotate(angle);
-	// Draw a simple arrow shape for the ISS
+	const lastPositions = [...paths].slice(-2);
+	ctx.translate(lastPositions[1].x, lastPositions[1].y);
+	pointToAngle =
+		Math.atan2(
+			lastPositions[1].y - lastPositions[0].y,
+			lastPositions[1].x - lastPositions[0].x
+		) +
+		Math.PI / 2;
+	ctx.rotate(pointToAngle);
 	ctx.beginPath();
-	ctx.moveTo(10, 0);
-	ctx.lineTo(-5, -5);
-	ctx.lineTo(-5, 5);
+	ctx.moveTo(-8, 0);
+	ctx.lineTo(0, -16);
+	ctx.lineTo(8, 0);
 	ctx.closePath();
-	ctx.fillStyle = "red";
+	ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
 	ctx.fill();
-	ctx.restore();
+	ctx.strokeStyle = "rgb(0, 0, 0)";
 
-	// 9. Send the final image to the client
+	ctx.restore(); //Escapes the translation for rotation
+
+	//draw the circle the iss will go in
+	ctx.save();
+	ctx.beginPath();
+	ctx.arc(paths[0].x, paths[0].y, issImg.width / 2 + 20, 0, 2 * Math.PI); //circle
+	ctx.clip();
+
+	//point the iss in the direction it's going and draw it
+	ctx.save();
+	ctx.translate(paths[0].x, paths[0].y); //doing this so rotate works properly
+	pointToAngle =
+		Math.atan2(paths[5].y - paths[0].y, paths[5].x - paths[0].x) +
+		Math.PI / 2;
+	ctx.rotate(pointToAngle);
+	ctx.drawImage(issImg, -issImg.width / 2, -issImg.height / 2);
+	ctx.restore(); //Gets rid of translation needed for rotation
+
+	ctx.restore(); //Escapes the clip used to fit ISS in circle
+
+	//Draw the sun
+	const sunPosition = equirectangularProjection(
+		mapImg.width,
+		mapImg.height,
+		latitude,
+		longitude
+	);
+	ctx.beginPath();
+	ctx.arc(sunPosition[0], sunPosition[1], 25, 0, Math.PI * 2);
+	ctx.fillStyle = "rgb(255, 255, 0)";
+	ctx.fill();
+	ctx.restore(); //Escapes translation to center of screen
+
+	//send canvas to client
 	const stream = canvas.toBuffer("image/png", {
-		compressionLevel: 1,
+		compressionLevel: 1, //for speed 1-9, 1 is fastest 9 is slowest
 		filters: canvas.PNG_FILTER_NONE,
 	});
 	res.setHeader("Content-Type", "image/png");
 	res.send(stream);
 });
 
+//run the server on a port
 app.listen(port, () => {
 	console.log(`Running on port ${port}/map!`);
 });
