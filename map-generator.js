@@ -1,15 +1,9 @@
+// map-generator.js
+
 const path = require("node:path");
 const { createCanvas, loadImage } = require("canvas");
-const express = require("express");
-
-const Satellite = require("./libs/sat");
-const getSunPosition = require("./libs/get-sun-position");
-const getMoonPosition = require("./libs/get-moon-position");
-const getMoonPhase = require("./libs/get-moon-phase");
 
 // --- Configuration ---
-const app = express();
-const port = 5000;
 const RENDERER_API_URL = "http://localhost:3000";
 
 // =============================================================================
@@ -37,8 +31,6 @@ function equirectangularProjection(mapW, mapH, lat, lon) {
 // DRAWING FUNCTIONS
 // =============================================================================
 
-// --- THE FINAL FIX IS HERE ---
-// The function is now self-contained and manages its own coordinate system.
 function drawMoonPhase(ctx, lat, lon, radius, cycleAngle) {
 	const a = (cycleAngle * Math.PI) / 180;
 	const w = Math.cos(a) * radius;
@@ -47,13 +39,8 @@ function drawMoonPhase(ctx, lat, lon, radius, cycleAngle) {
 	const epsilon = 0.01;
 
 	ctx.save();
-	// 1. Move the origin to the center of the canvas, just like the other functions.
 	ctx.translate(ctx.canvas.width / 2, ctx.canvas.height / 2);
-
-	// 2. Calculate the pixel coordinates relative to the new center origin.
 	const [x, y] = equirectangularProjection(ctx.canvas.width, ctx.canvas.height, lat, lon);
-
-	// 3. Translate locally to the moon's drawing position.
 	ctx.translate(x, y);
 
 	const litColor = "rgb(230, 230, 230)";
@@ -180,36 +167,27 @@ function drawIssIcon(ctx, paths, issImg, diameter) {
 	const currentPos = paths[0];
 	const nextPos = paths[5];
 
-	// Calculate the new height to maintain the original aspect ratio
 	const aspectRatio = issImg.height / issImg.width;
 	const newHeight = diameter * aspectRatio;
-
-	// The halo radius is half the new diameter plus some padding
 	const haloRadius = diameter / 2 + 20;
 
-	// --- Draw the Halo ---
 	ctx.beginPath();
 	ctx.arc(currentPos.x, currentPos.y, haloRadius, 0, 2 * Math.PI);
 	ctx.fillStyle = "rgba(240, 240, 240, 0.3)";
 	ctx.fill();
 
-	// Use the halo's path to clip the area where the ISS will be drawn
 	ctx.save();
 	ctx.clip();
 
-	// --- Draw the Rotated and Resized ISS Image ---
 	ctx.save();
 	ctx.translate(currentPos.x, currentPos.y);
 	const pointToAngle = Math.atan2(nextPos.y - currentPos.y, nextPos.x - currentPos.x) + Math.PI / 2;
 	ctx.rotate(pointToAngle);
-
-	// Draw the image, centered and scaled to the new diameter
 	ctx.drawImage(issImg, -diameter / 2, -newHeight / 2, diameter, newHeight);
+	ctx.restore();
 
-	ctx.restore(); // Undoes the image's rotation and translation
-
-	ctx.restore(); // Undoes the clipping
-	ctx.restore(); // Undoes the main canvas translation
+	ctx.restore();
+	ctx.restore();
 }
 
 function drawSunIcon(ctx, mapW, mapH, lat, lon) {
@@ -224,57 +202,35 @@ function drawSunIcon(ctx, mapW, mapH, lat, lon) {
 }
 
 // =============================================================================
-// MAIN API ROUTE
+// MAIN EXPORTED FUNCTION
 // =============================================================================
 
-app.get("/map", async (__, res) => {
-	try {
-		const currentTime = new Date();
+async function generateMapImage(data) {
+	const { sunData, moonData, moonPhase, iss, currentTime } = data;
 
-		const sunData = getSunPosition(currentTime);
-		const moonData = getMoonPosition(currentTime);
-		const moonPhase = getMoonPhase(currentTime);
-		const issTLE = [
-			"1 25544U 98067A   25165.81361073  .00010333  00000+0  18747-3 0  9997",
-			"2 25544  51.6371 318.8403 0001501 246.5954 113.4877 15.50200772514790"
-		];
-		const iss = new Satellite(issTLE);
+	// Load Assets
+	const mapImg = await loadImage(`${RENDERER_API_URL}/?lat=${sunData.latitude}&lon=${sunData.longitude}`);
+	const issImg = await loadImage(path.join(__dirname, "images", "iss.png"));
 
-		const mapImg = await loadImage(`${RENDERER_API_URL}/?lat=${sunData.latitude}&lon=${sunData.longitude}`);
-		const issImg = await loadImage(path.join(__dirname, "images", "iss.png"));
+	// Setup Canvas
+	const canvas = createCanvas(mapImg.width, mapImg.height);
+	const ctx = canvas.getContext("2d");
+	ctx.drawImage(mapImg, 0, 0);
 
-		const canvas = createCanvas(mapImg.width, mapImg.height);
-		const ctx = canvas.getContext("2d");
-		ctx.drawImage(mapImg, 0, 0);
+	// Calculate Path
+	const issPath = calculateIssPath(iss, currentTime, mapImg.width, mapImg.height);
 
-		const issPath = calculateIssPath(iss, currentTime, mapImg.width, mapImg.height);
+	// Draw Elements onto Canvas
+	drawIssPathAndArrow(ctx, issPath);
+	drawSunIcon(ctx, mapImg.width, mapImg.height, sunData.latitude, sunData.longitude);
+	drawMoonPhase(ctx, moonData.latitude, moonData.longitude, 30, moonPhase.cycleAngle);
+	drawIssIcon(ctx, issPath, issImg, 80);
 
-		drawIssPathAndArrow(ctx, issPath);
-		drawSunIcon(ctx, mapImg.width, mapImg.height, sunData.latitude, sunData.longitude);
-		// --- THE CHANGE IS HERE ---
-		// The call is now cleaner and self-contained.
-		drawMoonPhase(
-			ctx,
-			moonData.latitude,
-			moonData.longitude,
-			30, // radius
-			moonPhase.cycleAngle
-		);
-		drawIssIcon(ctx, issPath, issImg, 80);
+	// Return the final image as a buffer
+	return canvas.toBuffer("image/png", {
+		compressionLevel: 1,
+		filters: canvas.PNG_FILTER_NONE
+	});
+}
 
-		const stream = canvas.toBuffer("image/png", {
-			compressionLevel: 1,
-			filters: canvas.PNG_FILTER_NONE
-		});
-		res.setHeader("Content-Type", "image/png");
-		res.send(stream);
-	} catch (error) {
-		console.error("Failed to generate map:", error);
-		res.status(500).send("Error generating map.");
-	}
-});
-
-// --- Run the server ---
-app.listen(port, () => {
-	console.log(`Running on port ${port}/map!`);
-});
+module.exports = { generateMapImage };
