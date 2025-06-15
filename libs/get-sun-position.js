@@ -334,7 +334,7 @@ function getSunPosition(time) {
 	lon = normalizeAngle(lon);
 
 	//Adding correction values to longitude
-	let apparentLongitude = lon + nutation + abberation;
+	let apparentLongitude = lon + nutation + aberration;
 	apparentLongitude = normalizeAngle(apparentLongitude);
 
 	//converting from Ecliptic to Equatorial coordinates
