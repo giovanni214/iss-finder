@@ -314,7 +314,7 @@ function getSunPosition(time) {
 	B = radToDeg(B);
 
 	//geocentric longitude and latitude
-	let lon = L + 180;
+	let lon = L;
 	let lat = -B;
 
 	//converting from geocentric to FK5 system

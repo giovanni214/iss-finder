@@ -70,25 +70,28 @@ async function getTLE(link, name) {
 }
 
 app.get("/predict", async (__, res) => {
-	const tleData = await getTLE("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544", "ISS (ZARYA)");
+	const tleData = [
+		"1 25544U 98067A   25208.16578800  .00012255  00000+0  22132-3 0  9999",
+		"2 25544  51.6347 108.9215 0001985 120.4338 239.6847 15.50135736521360"
+	]; //await getTLE("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544", "ISS (ZARYA)");
 	const iss = new Satellite(tleData);
 	const oneDayInMillis = 86400000;
 	const startTime = new Date();
 	const endTime = new Date(startTime.getTime() + oneDayInMillis * 10);
 	const mylocation = {
-		latitude: satellite.degreesToRadians(36.527279),
-		longitude: satellite.degreesToRadians(-87.360336),
+		latitude: satellite.degreesToRadians(36.58018),
+		longitude: satellite.degreesToRadians(-87.21605),
 		height: 0.15 // in kilometers
 	};
 
 	const passes = iss.predict(mylocation, startTime, endTime, 30, 15);
 
-	console.log(`Found ${passes.length} passes over the next 10 days:`);
+	console.log(`TLE Data: ${tleData}\nCurrent Date: ${new Date().toLocaleString()}`);
 
 	for (let pass of passes) {
 		const startTime = pass.pass[0].time;
 		let text = new Date(startTime).toLocaleString();
-		console.log(text);
+		console.log(text, pass.pass[0].isEclipsed);
 	}
 	res.json(passes);
 });
