@@ -137,7 +137,8 @@ class Satellite {
 				currentPass.push({
 					time: dateObj.getTime(),
 					...observerPOV,
-					isEclipsed: isEclipsed // ✅ New property
+					isEclipsed: isEclipsed,
+          humanTime: dateObj.toLocaleString() + " CENTRAL"
 				});
 
 				if (elevation > peakElevation) {
