@@ -7,6 +7,9 @@ const { generateMapImage } = require("./map-generator"); // Import the new drawi
 const getSunPosition = require("./libs/get-sun-position");
 const getMoonPosition = require("./libs/get-moon-position");
 const getMoonPhase = require("./libs/get-moon-phase");
+
+const { degToRad } = require("./libs/math");
+const satellite = require("satellite.js");
 const Satellite = require("./libs/sat");
 
 // --- Configuration ---
@@ -52,10 +55,44 @@ app.get("/map", async (__, res) => {
 	}
 });
 
-// --- Add future routes here! ---
-// app.get("/other-endpoint", async (req, res) => { ... });
+async function getTLE(link, name) {
+	const response = await fetch(link);
+	if (!response.ok) {
+		throw new Error(`Failed to fetch TLE data: ${response.statusText}`);
+	}
+	let data = await response.text();
+	data = data.split(/\r?\n/).map((line) => line.trim());
+	const startOfData = data.indexOf(name);
+	if (startOfData === -1) {
+		throw new Error(`Satellite with name "${name}" not found in TLE data.`);
+	}
+	return [data[startOfData + 1], data[startOfData + 2]];
+}
 
-// --- Run the server ---
+app.get("/predict", async (__, res) => {
+	const tleData = await getTLE("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544", "ISS (ZARYA)");
+	const iss = new Satellite(tleData);
+	const oneDayInMillis = 86400000;
+	const startTime = new Date();
+	const endTime = new Date(startTime.getTime() + oneDayInMillis * 10);
+	const mylocation = {
+		latitude: satellite.degreesToRadians(36.527279),
+		longitude: satellite.degreesToRadians(-87.360336),
+		height: 0.15 // in kilometers
+	};
+
+	const passes = iss.predict(mylocation, startTime, endTime, 30, 15);
+
+	console.log(`Found ${passes.length} passes over the next 10 days:`);
+
+	for (let pass of passes) {
+		const startTime = pass.pass[0].time;
+		let text = new Date(startTime).toLocaleString();
+		console.log(text);
+	}
+	res.json(passes);
+});
+
 app.listen(port, () => {
 	console.log(`Server running on port ${port}. Access map at http://localhost:${port}/map`);
 });
