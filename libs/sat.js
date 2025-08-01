@@ -5,6 +5,7 @@ const getSunPosition = require("./get-sun-position.js"); // For Sun calculations
 // --- Physical Constants ---
 const AU_IN_KM = 149597870.7;
 const EARTH_RADIUS_KM = 6371.0084; // WGS84 mean radius
+const SUN_RADIUS_KM = 696340; // Sun's mean radius
 
 // --- Helper Functions for Eclipse Calculation ---
 
@@ -27,30 +28,37 @@ function getSunEciVector(ra_deg, dec_deg, dist_au) {
 	return { x, y, z };
 }
 
-/**
- * Determines if a satellite is in the Earth's shadow using a cylindrical model.
- * @param {object} satEciPos - The satellite's ECI position vector {x, y, z} in km.
- * @param {object} sunEciPos - The Sun's ECI position vector {x, y, z} in km.
- * @returns {boolean} True if the satellite is in shadow, false otherwise.
- */
 function isSatInSunShadow(satEciPos, sunEciPos) {
 	const dot = (v1, v2) => v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 	const sunDist = Math.sqrt(dot(sunEciPos, sunEciPos));
-	const sunUnitVector = { x: sunEciPos.x / sunDist, y: sunEciPos.y / sunDist, z: sunEciPos.z / sunDist };
+	const sunUnitVector = {
+		x: sunEciPos.x / sunDist,
+		y: sunEciPos.y / sunDist,
+		z: sunEciPos.z / sunDist
+	};
 
-	// Project satellite's position onto the Sun vector.
-	// A positive value means it's on the sunlit side of Earth.
+	// Project the satellite's position onto the Sun vector.
+	// A positive value means the satellite is on the sunlit side of Earth.
 	const satProjection = dot(satEciPos, sunUnitVector);
 	if (satProjection >= 0) {
 		return false;
 	}
 
+	// Calculate the angle of the penumbra cone (the region of partial shadow).
+	const penumbraAngle = Math.atan((SUN_RADIUS_KM + EARTH_RADIUS_KM) / sunDist);
+
+	// Calculate the radius of the penumbra at the satellite's distance.
+	const penumbraRadius = Math.abs(satProjection) * Math.tan(penumbraAngle);
+
 	// Use Pythagorean theorem to find the satellite's perpendicular distance
-	// from the Earth-Sun line. If it's less than Earth's radius, it's in the shadow.
+	// from the Earth-Sun line.
 	const satDistanceSquared = dot(satEciPos, satEciPos);
 	const perpendicularDistSq = satDistanceSquared - satProjection * satProjection;
+	const perpendicularDist = Math.sqrt(perpendicularDistSq);
 
-	return perpendicularDistSq < EARTH_RADIUS_KM * EARTH_RADIUS_KM;
+	// The satellite is in shadow if its distance from the Earth-Sun line
+	// is less than the radius of the penumbra at that point.
+	return perpendicularDist < penumbraRadius;
 }
 
 class Satellite {
@@ -127,7 +135,7 @@ class Satellite {
 				const sunEciPosition = getSunEciVector(sunData.rightAscension, sunData.declination, sunData.distanceAU);
 
 				// 3. Determine if the satellite is in shadow
-				const isEclipsed = isSatInSunShadow(positionEci, sunEciPosition);
+				const eclipseStatus = isSatInSunShadow(positionEci, sunEciPosition);
 				// --- END ECLIPSE CALCULATION ---
 
 				observerPOV.elevation = elevation;
@@ -137,8 +145,8 @@ class Satellite {
 				currentPass.push({
 					time: dateObj.getTime(),
 					...observerPOV,
-					isEclipsed: isEclipsed,
-          humanTime: dateObj.toLocaleString() + " CENTRAL"
+					isInShadow: eclipseStatus,
+					humanTime: dateObj.toLocaleString() + " CENTRAL"
 				});
 
 				if (elevation > peakElevation) {

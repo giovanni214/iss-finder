@@ -30,8 +30,8 @@ app.get("/map", async (__, res) => {
 		const moonData = getMoonPosition(currentTime);
 		const moonPhase = getMoonPhase(currentTime);
 		const issTLE = [
-			"1 25544U 98067A   25165.81361073  .00010333  00000+0  18747-3 0  9997",
-			"2 25544  51.6371 318.8403 0001501 246.5954 113.4877 15.50200772514790"
+			"1 25544U 98067A   25212.99608426  .00012187  00000+0  21918-3 0  9998",
+			"2 25544  51.6364  84.9763 0002287 136.8880 197.5582 15.50259437522105"
 		];
 		const iss = new Satellite(issTLE);
 
@@ -71,8 +71,8 @@ async function getTLE(link, name) {
 
 app.get("/predict", async (__, res) => {
 	const tleData = [
-		"1 25544U 98067A   25208.16578800  .00012255  00000+0  22132-3 0  9999",
-		"2 25544  51.6347 108.9215 0001985 120.4338 239.6847 15.50135736521360"
+		"1 25544U 98067A   25212.99608426  .00012187  00000+0  21918-3 0  9998",
+		"2 25544  51.6364  84.9763 0002287 136.8880 197.5582 15.50259437522105"
 	]; //await getTLE("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544", "ISS (ZARYA)");
 	const iss = new Satellite(tleData);
 	const oneDayInMillis = 86400000;
@@ -91,8 +91,9 @@ app.get("/predict", async (__, res) => {
 	for (let pass of passes) {
 		const startTime = pass.pass[0].time;
 		let text = new Date(startTime).toLocaleString();
-		console.log(text, pass.pass[0].isEclipsed);
+		console.log(text, pass.pass[0].isInShadow);
 	}
+  
 	res.json(passes);
 });
 
