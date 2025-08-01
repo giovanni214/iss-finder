@@ -7,7 +7,7 @@ const { findClosestTle } = require("./tle-date-finder"); // Import the module
 
 // The target date as milliseconds since the UTC epoch
 // Example: July 15, 2024, 00:00:00 UTC
-const targetTimestamp = 1721037600000;
+const targetTimestamp = 1721001600000;
 
 // Path to your TLE data file
 const tleFilePath = path.join(__dirname, "zarya.txt");
