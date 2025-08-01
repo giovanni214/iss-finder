@@ -1,3 +1,5 @@
+// libs/sat.js
+
 const { radToDeg } = require("./math");
 const satellite = require("satellite.js");
 const { dateToJulian, greenwichTime } = require("./dates.js");
@@ -10,7 +12,7 @@ const SUN_RADIUS_KM = 696340; // Sun's mean radius
 
 // --- Helper Functions for Eclipse Calculation ---
 
-/**\
+/**
  * Converts the Sun's astronomical coordinates (RA, Dec) to an ECI vector.
  * @param {number} ra_deg - Right Ascension in degrees.
  * @param {number} dec_deg - Declination in degrees.
@@ -100,9 +102,19 @@ class Satellite {
 		throw new Error(`Invalid location type "${type}" specified.`);
 	}
 
-	predict(location, startTime, endTime, stepSeconds = 30, minElevationAngle = 0) {
+	predict(location, startTime, endTime, options = {}) {
 		this._validateDate(startTime);
 		this._validateDate(endTime);
+
+		const {
+			stepSeconds = 30,
+			minElevationAngle = 0,
+			tleCache = [] // Expect a pre-loaded TLE cache
+		} = options;
+
+		if (!tleCache || tleCache.length === 0) {
+			throw new Error("A non-empty tleCache must be provided for predictions.");
+		}
 
 		const stepMillis = stepSeconds * 1000;
 		const startMillis = startTime.getTime();
@@ -111,45 +123,46 @@ class Satellite {
 		const passes = [];
 		let currentPass = [];
 		let peakElevation = -Infinity;
+		let tleIndex = 0; // Use an index to efficiently find the next TLE
 
 		for (let time = startMillis; time < endMillis; time += stepMillis) {
 			const dateObj = new Date(time);
+
+			// --- Efficient in-memory TLE search ---
+			// Advance our TLE index as we move forward in time
+			while (tleIndex < tleCache.length - 1 && tleCache[tleIndex + 1].date.getTime() <= time) {
+				tleIndex++;
+			}
+			const currentTle = tleCache[tleIndex].tle;
+			this.satrec = satellite.twoline2satrec(currentTle[0], currentTle[1]);
+			// --- End of efficient search ---
+
 			const JDE = dateToJulian(dateObj);
 			const gmst = greenwichTime(JDE);
 
 			const positionAndVelocity = satellite.propagate(this.satrec, dateObj);
-			if (positionAndVelocity === null) {
-				continue; // Satellite has decayed, skip this step
+			if (!positionAndVelocity.position) {
+				continue;
 			}
 
-			// We need the ECI position for the shadow calculation
 			const positionEci = positionAndVelocity.position;
 			const positionEcf = satellite.eciToEcf(positionEci, gmst);
 			const observerPOV = satellite.ecfToLookAngles(location, positionEcf);
-
 			const elevation = radToDeg(observerPOV.elevation);
 
 			if (elevation >= 0) {
-				// --- ✨ ECLIPSE CALCULATION ADDED HERE ---
-				// 1. Get the Sun's position for the current time
-				const sunData = getSunPosition(dateObj); // Returns { ra, dec, distance }
-
-				// 2. Convert Sun's coordinates to an ECI vector
+				const sunData = getSunPosition(dateObj);
 				const sunEciPosition = getSunEciVector(sunData.rightAscension, sunData.declination, sunData.distanceAU);
-
-				// 3. Determine if the satellite is in shadow
 				const eclipseStatus = isSatInSunShadow(positionEci, sunEciPosition);
-				// --- END ECLIPSE CALCULATION ---
 
 				observerPOV.elevation = elevation;
 				observerPOV.azimuth = radToDeg(observerPOV.azimuth);
 
-				// Add the eclipse status to the pass data point
 				currentPass.push({
 					time: dateObj.getTime(),
 					...observerPOV,
 					isInShadow: eclipseStatus,
-					humanTime: dateObj.toLocaleString() + " CENTRAL"
+					humanTime: dateObj.toLocaleString("en-US", { timeZone: "America/Chicago" })
 				});
 
 				if (elevation > peakElevation) {

@@ -1,85 +1,54 @@
-// In libs/tle-finder.js
+// tle-date-finder.js
 
 const fs = require("fs");
+const path = require("path");
 
-/**
- * Converts a TLE epoch string (e.g., "24196.53559491") into a precise
- * JavaScript Date object, including the time of day.
- * @param {string} tleEpoch - The epoch string from line 1 of a TLE.
- * @returns {Date} A Date object representing the TLE's exact epoch.
- */
-function tleEpochToDate(tleEpoch) {
-	const yearStr = tleEpoch.substring(0, 2);
-	const epochDay = parseFloat(tleEpoch.substring(2));
-
-	// Determine the full year (handles the Y2K problem for TLEs)
-	const year = parseInt(yearStr) < 57 ? 2000 + parseInt(yearStr) : 1900 + parseInt(yearStr);
-
-	// Get the integer part of the day (the day of the year)
+// --- Helper function to parse a TLE date ---
+function parseTleDate(tleLine1) {
+	const epochYear = parseInt(tleLine1.substring(18, 20));
+	const epochDay = parseFloat(tleLine1.substring(20, 32));
+	const year = epochYear < 57 ? 2000 + epochYear : 1900 + epochYear;
 	const dayOfYear = Math.floor(epochDay);
-
-	// Get the fractional part of the day
 	const fractionOfDay = epochDay - dayOfYear;
-
-	// Calculate the total milliseconds for the fractional day
-	const millisecondsInDay = 86400000; // (1000 * 60 * 60 * 24)
-	const epochMillis = Math.round(fractionOfDay * millisecondsInDay);
-
-	// Create a date for the beginning of the year and add the full days
-	const date = new Date(Date.UTC(year, 0, 1)); // Starts at Jan 1st, 00:00:00 UTC
-	date.setUTCDate(date.getUTCDate() + dayOfYear - 1);
-
-	// Add the milliseconds for the time of day
-	date.setUTCMilliseconds(date.getUTCMilliseconds() + epochMillis);
-
+	const date = new Date(year, 0, dayOfYear);
+	date.setSeconds(date.getSeconds() + fractionOfDay * 86400);
 	return date;
 }
 
-/**
- * Finds the closest TLE in a file to a target date without going past it.
- * @param {string} filePath - The path to the TLE file (e.g., 'zarya.txt').
- * @param {number} targetMillis - The target date as milliseconds since the UTC epoch.
- * @returns {{tle: string[], ageDays: number, date: Date} | null} The TLE data or null if none is found.
- */
-function findClosestTle(filePath, targetMillis) {
-	if (!fs.existsSync(filePath)) {
-		console.error(`Error: File not found at ${filePath}`);
-		return null;
-	}
-
-	const targetDate = new Date(targetMillis);
+// --- NEW: Function to load all TLEs into a cached array ---
+function loadAllTles(filePath) {
 	const fileContent = fs.readFileSync(filePath, "utf-8");
-	const lines = fileContent.split(/\r?\n/).filter((line) => line.trim() !== "");
-
-	let closestTle = null;
-	let smallestDiff = Infinity;
+	const lines = fileContent.split(/\r?\n/);
+	const tles = [];
 
 	for (let i = 0; i < lines.length - 1; i += 2) {
-		const line1 = lines[i];
-		const line2 = lines[i + 1];
-
-		if (!line1.startsWith("1 ")) continue;
-
-		const tleEpochStr = line1.substring(18, 32).trim();
-		const tleDate = tleEpochToDate(tleEpochStr);
-
-		const diff = targetDate.getTime() - tleDate.getTime();
-
-		if (diff >= 0 && diff < smallestDiff) {
-			smallestDiff = diff;
-			closestTle = {
-				tle: [line1, line2],
-				date: tleDate
-			};
+		if (lines[i] && lines[i + 1]) {
+			const tle = [lines[i], lines[i + 1]];
+			const date = parseTleDate(lines[i]);
+			tles.push({ date, tle });
 		}
 	}
-
-	if (closestTle) {
-		closestTle.ageDays = smallestDiff / (1000 * 60 * 60 * 24);
-		return closestTle;
-	}
-
-	return null;
+	// Sort TLEs by date, oldest to newest
+	return tles.sort((a, b) => a.date - b.date);
 }
 
-module.exports = { findClosestTle };
+// --- Your existing function, now used for single lookups if needed ---
+function findClosestTle(filePath, targetTime) {
+	// This can still use the new loader for consistency
+	const allTles = loadAllTles(filePath);
+	let bestTle = null;
+	for (const tleData of allTles) {
+		if (tleData.date.getTime() <= targetTime) {
+			bestTle = tleData;
+		} else {
+			break;
+		}
+	}
+	return bestTle;
+}
+
+module.exports = {
+	findClosestTle,
+	loadAllTles, // Export the new function
+	parseTleDate
+};
