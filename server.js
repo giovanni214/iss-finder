@@ -162,7 +162,6 @@ app.get("/predict", async (__, res) => {
 	];
 	const iss = new Satellite(tleData);
 
-	// Using UTC dates to ensure the calculation is correct regardless of server location
 	const startTime = new Date(Date.UTC(2024, 6, 15, 0, 0, 0)); // July is month 6
 	const endTime = new Date(Date.UTC(2024, 6, 16, 0, 0, 0));
 
@@ -181,9 +180,10 @@ app.get("/predict", async (__, res) => {
 			if (point.isInShadow) continue;
 
 			const time = new Date(point.time);
-			const sunData = getSunPosition(time); // This will now use the corrected time logic
+			const sunData = getSunPosition(time);
 			const sunEci = getSunEciVector(sunData.rightAscension, sunData.declination, sunData.distanceAU);
-			const sunEcf = satellite.eciToEcf(sunEci, satellite.gstime(time));
+			const gmst = satellite.gstime(time); // Using the library's gstime is fine here as it's only for the sun check now
+			const sunEcf = satellite.eciToEcf(sunEci, gmst);
 			const sunLookAngles = satellite.ecfToLookAngles(mylocation, sunEcf);
 
 			if (satellite.degreesLat(sunLookAngles.elevation) < -6) {

@@ -309,7 +309,7 @@ function getSunPosition(time) {
 
 	const { rightAscension, declination } = eclipticToEquatorial(apparentLongitude, lat, trueObliquity);
 
-	const gmst = greenwichTime(time);
+	const gmst = greenwichTime(JDE);
 
 	const { geographicLatitude, geographicLongitude } = getZenithPoint(gmst, rightAscension, declination);
 
