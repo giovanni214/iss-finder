@@ -1,9 +1,8 @@
 // In libs/get-sun-position.js
 
 const { sin, cos, arcSecToDeg, normalizeAngle, radToDeg, atan2, asin, tan } = require("./math");
-const { dateToJulian } = require("./dates");
+const { dateToJulian, greenwichTime } = require("./dates");
 const getObliquity = require("./get-obliquity");
-const satellite = require("satellite.js"); // <-- **CRITICAL ADDITION**
 
 function eclipticToEquatorial(longitude, latitude, trueObliquity) {
 	const rightAscension = atan2(
@@ -310,8 +309,7 @@ function getSunPosition(time) {
 
 	const { rightAscension, declination } = eclipticToEquatorial(apparentLongitude, lat, trueObliquity);
 
-	// **THE FIX**: Use the accurate gstime function from the satellite.js library
-	const gmst = satellite.gstime(time);
+	const gmst = greenwichTime(time);
 
 	const { geographicLatitude, geographicLongitude } = getZenithPoint(gmst, rightAscension, declination);
 

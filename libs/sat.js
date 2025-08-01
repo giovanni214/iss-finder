@@ -1,5 +1,6 @@
 const { radToDeg } = require("./math");
 const satellite = require("satellite.js");
+const {greenwichTime} = require("./dates.js")
 const getSunPosition = require("./get-sun-position.js"); // For Sun calculations
 
 // --- Physical Constants ---
@@ -80,7 +81,7 @@ class Satellite {
 
 	getLocation(time, type = "latlon") {
 		this._validateDate(time);
-		const gmst = satellite.gstime(time);
+		const gmst = greenwichTime(time)
 		const positionAndVelocity = satellite.propagate(this.satrec, time);
 		if (positionAndVelocity === false) {
 			return false;
@@ -112,7 +113,7 @@ class Satellite {
 
 		for (let time = startMillis; time < endMillis; time += stepMillis) {
 			const dateObj = new Date(time);
-			const gmst = satellite.gstime(dateObj);
+			const gmst = greenwichTime(time)
 
 			const positionAndVelocity = satellite.propagate(this.satrec, dateObj);
 			if (positionAndVelocity === false) {
