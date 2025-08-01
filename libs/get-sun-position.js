@@ -1,42 +1,38 @@
+// In libs/get-sun-position.js
+
 const { sin, cos, arcSecToDeg, normalizeAngle, radToDeg, atan2, asin, tan } = require("./math");
-const { greenwichTime, dateToJulian } = require("./dates");
+const { dateToJulian } = require("./dates");
+const getObliquity = require("./get-obliquity");
+const satellite = require("satellite.js"); // <-- **CRITICAL ADDITION**
 
 function eclipticToEquatorial(longitude, latitude, trueObliquity) {
 	const rightAscension = atan2(
 		sin(longitude) * cos(trueObliquity) - tan(latitude) * sin(trueObliquity),
 		cos(longitude)
 	);
-
-	const declination = asin(
-		sin(latitude) * cos(trueObliquity) + cos(latitude) * sin(trueObliquity) * sin(longitude)
-	);
-
+	const declination = asin(sin(latitude) * cos(trueObliquity) + cos(latitude) * sin(trueObliquity) * sin(longitude));
 	return {
 		rightAscension: normalizeAngle(rightAscension),
-		declination: declination, // Already in degrees
+		declination: declination
 	};
 }
 
 function getZenithPoint(gmst, rightAscension, declination) {
-	// The geographic latitude of the point where the Sun is at zenith
 	const latitude = declination;
-
-	// The geographic longitude of that point
 	const longitude = rightAscension - gmst;
-
 	return {
 		geographicLatitude: latitude,
-		geographicLongitude: normalizeAngle(longitude),
+		geographicLongitude: normalizeAngle(longitude)
 	};
 }
-
-const getObliquity = require("./get-obliquity");
 
 function getSunPosition(time) {
 	const JDE = dateToJulian(time);
 	const t = (JDE - 2451545) / 365250;
 	const T = 10 * t;
 
+	// --- All the long LTerms, BTerms, and RTerms arrays stay here ---
+	// (Omitted for brevity, but they are correct and should remain)
 	const LTerms = [
 		[
 			[175347046, 0, 0],
@@ -178,7 +174,6 @@ function getSunPosition(time) {
 		],
 		[[1, 3.14, 0]]
 	];
-
 	const BTerms = [
 		[
 			[280, 3.199, 84334.662],
@@ -192,7 +187,6 @@ function getSunPosition(time) {
 			[6, 1.73, 5223.69]
 		]
 	];
-
 	const RTerms = [
 		[
 			[100013989, 0, 0],
@@ -263,102 +257,71 @@ function getSunPosition(time) {
 		[[4, 2.56, 6283.08]]
 	];
 
-	//Longitude
-	let L = 0; //given in radians
+	let L = 0,
+		B = 0,
+		R = 0;
 
-	//Latitude
-	let B = 0; //given in radians
-
-	//Distance from Center of the Earth to Center of the Sun
-	let R = 0; //given in AU
-
-	//Equation is A * cos(B + C * t) for each term
-	//Full term equation is L = (L0 + L1*T + L2*T^2 + L3*T^3...)
 	for (let i = 0; i < LTerms.length; i++) {
 		let sum = 0;
-		for (let j = 0; j < LTerms[i].length; j++) {
-			const term = LTerms[i][j];
+		for (const term of LTerms[i]) {
 			sum += term[0] * Math.cos(term[1] + term[2] * t);
 		}
-
 		L += sum * t ** i;
 	}
 
 	for (let i = 0; i < BTerms.length; i++) {
 		let sum = 0;
-		for (let j = 0; j < BTerms[i].length; j++) {
-			const term = BTerms[i][j];
+		for (const term of BTerms[i]) {
 			sum += term[0] * Math.cos(term[1] + term[2] * t);
 		}
-
 		B += sum * t ** i;
 	}
 
 	for (let i = 0; i < RTerms.length; i++) {
 		let sum = 0;
-		for (let j = 0; j < RTerms[i].length; j++) {
-			const term = RTerms[i][j];
+		for (const term of RTerms[i]) {
 			sum += term[0] * Math.cos(term[1] + term[2] * t);
 		}
-
 		R += sum * t ** i;
 	}
 
-	//Radians are in 10 ^ -8
 	L /= 10 ** 8;
 	B /= 10 ** 8;
 	R /= 10 ** 8;
-
-	//Convert to degrees for rest of the calculation
 	L = radToDeg(L);
 	B = radToDeg(B);
 
-	//geocentric longitude and latitude
 	let lon = L + 180;
 	let lat = -B;
 
-	//converting from geocentric to FK5 system
 	const lonP = lon - 1.397 * T - 0.00031 * T ** 2;
 	lon += arcSecToDeg(-0.09033);
 	lat += arcSecToDeg(0.03916) * (cos(lonP) - sin(lonP));
 
-	//correct for nutation
 	const { longitudeNutation, trueObliquity } = getObliquity(time);
 	const nutation = longitudeNutation;
 
-	//correct for abberation
-	const k = 20.49552; // Constant of aberration in arcseconds
-	const aberration = -arcSecToDeg(k) / R; // R is the distance in AU
+	const k = 20.49552;
+	const aberration = -arcSecToDeg(k) / R;
 
-  //Normalizing angles from 0-360;
 	lon = normalizeAngle(lon);
-
-	//Adding correction values to longitude
 	let apparentLongitude = lon + nutation + aberration;
 	apparentLongitude = normalizeAngle(apparentLongitude);
 
-	//converting from Ecliptic to Equatorial coordinates
 	const { rightAscension, declination } = eclipticToEquatorial(apparentLongitude, lat, trueObliquity);
 
-	// 1. Calculate GMST once, using the correct Julian Day value.
-	const gmst = greenwichTime(JDE);
+	// **THE FIX**: Use the accurate gstime function from the satellite.js library
+	const gmst = satellite.gstime(time);
 
-	// 2. Pass the calculated gmst to the corrected getZenithPoint function.
 	const { geographicLatitude, geographicLongitude } = getZenithPoint(gmst, rightAscension, declination);
 
-	// Return a clearly named object with the final, useful values.
 	return {
-		// The geographic coordinates for your map
 		latitude: geographicLatitude,
 		longitude: geographicLongitude,
-
-		// Equatorial coordinates (useful for astronomy)
 		rightAscension,
 		declination,
-
-		// Other useful info
 		distanceAU: R,
-		apparentEclipticLongitude: apparentLongitude,
+		apparentEclipticLongitude: apparentLongitude
 	};
 }
 
