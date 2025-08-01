@@ -157,8 +157,8 @@ async function getTLE(link, name) {
 app.get("/predict", async (__, res) => {
 	// Using your TLE from the zarya.txt file for the historical test
 	const tleData = [
-		"1 25544U 98067A   24196.53559491  .00018159  00000-0  33010-3 0  9993",
-		"2 25544  51.6402 296.2536 0008365  58.7892 227.1189 15.49544973350025"
+		"1 25544U 98067A   04366.01945963  .00025332  00000-0  19288-3 0  4829",
+		"2 25544  51.6400  40.8325 0003751 148.3751 290.3898 15.72088056349248"
 	];
 	const iss = new Satellite(tleData);
 

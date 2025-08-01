@@ -114,11 +114,11 @@ class Satellite {
 
 		for (let time = startMillis; time < endMillis; time += stepMillis) {
 			const dateObj = new Date(time);
-			const JDE = dateToJulian(time);
+			const JDE = dateToJulian(dateObj);
 			const gmst = greenwichTime(JDE);
 
 			const positionAndVelocity = satellite.propagate(this.satrec, dateObj);
-			if (positionAndVelocity === false) {
+			if (positionAndVelocity === null) {
 				continue; // Satellite has decayed, skip this step
 			}
 
