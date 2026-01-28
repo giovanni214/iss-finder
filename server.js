@@ -23,17 +23,17 @@ function getSunEciVector(ra_deg, dec_deg, dist_au) {
 	return { x, y, z };
 }
 
+const tleData = [
+	"1 25544U 98067A   26027.14328213  .00011252  00000+0  21756-3 0  9995",
+	"2 25544  51.6321 277.7306 0011150  34.3982 325.7726 15.48216781549899"
+];
+
 app.get("/map", async (__, res) => {
 	try {
 		const currentTime = new Date();
 		const sunData = getSunPosition(currentTime);
 		const moonData = getMoonPosition(currentTime);
 		const moonPhase = getMoonPhase(currentTime);
-
-		const tleData = [
-			"1 25544U 98067A   26027.14328213  .00011252  00000+0  21756-3 0  9995",
-			"2 25544  51.6321 277.7306 0011150  34.3982 325.7726 15.48216781549899"
-		];
 
 		const iss = new Satellite(tleData);
 
@@ -48,23 +48,10 @@ app.get("/map", async (__, res) => {
 
 app.get("/predict", async (__, res) => {
 	try {
-		const startTime = new Date(Date.UTC(2025, 6, 19, 0, 0, 0)); // July 19th, 2025
-		const endTime = new Date(Date.UTC(2025, 6, 27, 0, 0, 0)); // July 27th, 2025
+		const startTime = new Date();
+		const endTime = new Date(new Date().getTime() + 86400000 * 7);
 
-		const tleFilePath = path.join(__dirname, "iss_tle.txt");
-
-		// --- 🚀 Optimized TLE Loading ---
-		const tleCache = loadAllTles(tleFilePath);
-		if (tleCache.length === 0) {
-			return res.status(404).json({ error: "No TLEs found in iss_tle.txt" });
-		}
-
-		const initialTleResult = findClosestTle(tleFilePath, startTime.getTime());
-		if (!initialTleResult) {
-			return res.status(404).json({ error: `No TLE found on or before ${startTime.toUTCString()}` });
-		}
-		const iss = new Satellite(initialTleResult.tle);
-		// --- End of Optimization ---
+		const iss = new Satellite(tleData);
 
 		const mylocation = {
 			latitude: satellite.degreesToRadians(36.58018),
@@ -74,8 +61,7 @@ app.get("/predict", async (__, res) => {
 
 		const allPasses = iss.predict(mylocation, startTime, endTime, {
 			stepSeconds: 30,
-			minElevationAngle: 10, // Lowered to 10 to match SpotTheStation
-			tleCache: tleCache
+			minElevationAngle: 10 // Lowered to 10 to match SpotTheStation
 		});
 
 		const visiblePasses = [];

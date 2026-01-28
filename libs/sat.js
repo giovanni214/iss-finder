@@ -1,6 +1,6 @@
 // libs/sat.js
 
-const { radToDeg } = require("./math");
+const { radToDeg, degToRad } = require("./math");
 const satellite = require("satellite.js");
 const { dateToJulian, greenwichTime } = require("./dates.js");
 const getSunPosition = require("./get-sun-position.js"); // For Sun calculations
@@ -84,7 +84,7 @@ class Satellite {
 	getLocation(time, type = "latlon") {
 		this._validateDate(time);
 		const JDE = dateToJulian(time);
-		const gmst = greenwichTime(JDE);
+		const gmst = degToRad(greenwichTime(JDE));
 		const positionAndVelocity = satellite.propagate(this.satrec, time);
 		if (positionAndVelocity === false) {
 			return false;
@@ -108,13 +108,8 @@ class Satellite {
 
 		const {
 			stepSeconds = 30,
-			minElevationAngle = 0,
-			tleCache = [] // Expect a pre-loaded TLE cache
+			minElevationAngle = 0
 		} = options;
-
-		if (!tleCache || tleCache.length === 0) {
-			throw new Error("A non-empty tleCache must be provided for predictions.");
-		}
 
 		const stepMillis = stepSeconds * 1000;
 		const startMillis = startTime.getTime();
@@ -123,23 +118,19 @@ class Satellite {
 		const passes = [];
 		let currentPass = [];
 		let peakElevation = -Infinity;
-		let tleIndex = 0; // Use an index to efficiently find the next TLE
 
 		for (let time = startMillis; time < endMillis; time += stepMillis) {
 			const dateObj = new Date(time);
 
-			// --- Efficient in-memory TLE search ---
-			// Advance our TLE index as we move forward in time
-			while (tleIndex < tleCache.length - 1 && tleCache[tleIndex + 1].date.getTime() <= time) {
-				tleIndex++;
-			}
-			const currentTle = tleCache[tleIndex].tle;
-			this.satrec = satellite.twoline2satrec(currentTle[0], currentTle[1]);
-			// --- End of efficient search ---
+			// REMOVED: TLE Cache lookup logic.
+			// We now exclusively use 'this.satrec' initialized in the constructor.
 
 			const JDE = dateToJulian(dateObj);
-			const gmst = greenwichTime(JDE);
 
+			// 2. FIX: Convert degrees to radians here as well
+			const gmst = degToRad(greenwichTime(JDE));
+
+			// Use the static satrec instance
 			const positionAndVelocity = satellite.propagate(this.satrec, dateObj);
 			if (!positionAndVelocity.position) {
 				continue;
