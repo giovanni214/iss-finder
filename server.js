@@ -2,7 +2,6 @@
 
 const express = require("express");
 const path = require("path");
-const { findClosestTle, loadAllTles } = require("./tle-date-finder"); // Using the optimized TLE loader
 const { generateMapImage } = require("./map-generator");
 const getSunPosition = require("./libs/get-sun-position");
 const getMoonPosition = require("./libs/get-moon-position");
@@ -31,14 +30,12 @@ app.get("/map", async (__, res) => {
 		const moonData = getMoonPosition(currentTime);
 		const moonPhase = getMoonPhase(currentTime);
 
-		const tleFilePath = path.join(__dirname, "iss_tle.txt");
-		const tleResult = findClosestTle(tleFilePath, currentTime.getTime());
+		const tleData = [
+			"1 25544U 98067A   26027.14328213  .00011252  00000+0  21756-3 0  9995",
+			"2 25544  51.6321 277.7306 0011150  34.3982 325.7726 15.48216781549899"
+		];
 
-		if (!tleResult) {
-			throw new Error("Could not find a suitable TLE for the current time in iss_tle.txt");
-		}
-
-		const iss = new Satellite(tleResult.tle);
+		const iss = new Satellite(tleData);
 
 		const imageBuffer = await generateMapImage({ sunData, moonData, moonPhase, iss, currentTime });
 		res.setHeader("Content-Type", "image/png");

@@ -5,6 +5,6 @@
     "satellite.js": "^6.0.0"
   },
   "scripts": {
-    "start": "node create-map.js"
+    "start": "node server.js"
   }
 }
